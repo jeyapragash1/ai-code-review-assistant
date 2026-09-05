@@ -78,3 +78,36 @@ python -m alembic current
 
 - `GET /api/v1/health` is a lightweight liveness check and does not require PostgreSQL.
 - `GET /api/v1/health/ready` checks PostgreSQL with a safe `SELECT 1` and returns `503` if the database is unavailable.
+
+## GitHub Webhook Ingress
+
+`POST /api/v1/webhooks/github` receives GitHub webhook deliveries. A real GitHub webhook will be configured in a later task.
+
+Required headers:
+
+- `X-Hub-Signature-256`
+- `X-GitHub-Event`
+- `X-GitHub-Delivery`
+
+Supported events for this phase:
+
+- `ping`
+- `pull_request` with actions `opened`, `synchronize`, `reopened`, and `closed`
+
+Response behavior:
+
+- `200`: authenticated `ping` returns `pong`, or a duplicate delivery returns `duplicate`.
+- `202`: supported pull request deliveries return `accepted`; unsupported events/actions return `ignored`.
+- `400`: malformed headers, invalid JSON, or a non-object JSON payload.
+- `401`: missing or invalid webhook signature.
+- `413`: declared or actual body size exceeds `GITHUB_WEBHOOK_MAX_BODY_BYTES`.
+- `415`: content type is not `application/json`.
+- `503`: server misconfiguration or persistence failure.
+
+Signature verification uses HMAC-SHA256 with `GITHUB_WEBHOOK_SECRET` over the exact raw request bytes and compares the `sha256=` signature with constant-time comparison. The raw body is never parsed before signature verification.
+
+`GITHUB_WEBHOOK_MAX_BODY_BYTES` defaults to `2097152` bytes. Both `Content-Length`, when provided, and the actual bytes read are checked.
+
+`X-GitHub-Delivery` is the idempotency key. Duplicate delivery IDs never create a second `webhook_events` row.
+
+For safe local testing, use a disposable secret in `.env`, calculate `X-Hub-Signature-256` over the exact request body bytes, and send only synthetic JSON payloads. Never expose the webhook secret, signature, raw request body, decoded payload, tokens, or repository source code in logs, screenshots, terminal output, or commits.

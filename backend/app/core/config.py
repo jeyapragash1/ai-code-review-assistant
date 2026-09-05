@@ -42,6 +42,10 @@ class Settings(BaseSettings):
         str,
         Field(validation_alias="GITHUB_WEBHOOK_SECRET", default=""),
     ]
+    github_webhook_max_body_bytes: Annotated[
+        int,
+        Field(validation_alias="GITHUB_WEBHOOK_MAX_BODY_BYTES", default=2 * 1024 * 1024),
+    ]
     gemini_api_key: Annotated[str, Field(validation_alias="GEMINI_API_KEY", default="")]
 
     @property

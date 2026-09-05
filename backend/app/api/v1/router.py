@@ -11,12 +11,14 @@ from app.api.v1.endpoints.health import (
     ReadinessUnavailableResponse,
     get_health,
 )
+from app.api.v1.endpoints.webhooks import router as webhooks_router
 from app.db.health import check_database_connection
 from app.db.session import get_db_session
 
 logger = logging.getLogger(__name__)
 
 api_router = APIRouter()
+api_router.include_router(webhooks_router)
 
 
 @api_router.get("/health", response_model=HealthResponse, tags=["health"])
