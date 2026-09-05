@@ -52,6 +52,14 @@ python -m pytest
 
 The backend uses SQLAlchemy 2 async sessions with Psycopg 3. FastAPI disposes database connections during application shutdown.
 
+The first GitHub ingestion tables are:
+
+- `repositories`: stores synchronized GitHub repository identity and display metadata. It does not store GitHub tokens or secrets.
+- `pull_requests`: stores pull request identity and review-target metadata for a repository. Pull requests are deleted when their stored repository is deleted.
+- `webhook_events`: stores unique GitHub webhook deliveries for later asynchronous processing and retry support.
+
+Webhook payloads may contain sensitive metadata. Do not log, print, or expose raw webhook payload contents.
+
 Alembic is configured for async SQLAlchemy and reads `DATABASE_URL` from the application settings:
 
 ```powershell
@@ -60,7 +68,11 @@ python -m alembic upgrade head
 python -m alembic revision --autogenerate -m "describe change"
 ```
 
-No application tables or migrations are included yet.
+Inspect the active Alembic revision with:
+
+```powershell
+python -m alembic current
+```
 
 ## Health Checks
 

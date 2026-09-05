@@ -8,8 +8,12 @@ from sqlalchemy import pool
 from sqlalchemy.engine import Connection, make_url
 from sqlalchemy.ext.asyncio import async_engine_from_config
 
+from app.core.asyncio import configure_asyncio_event_loop_policy
 from app.core.config import settings
 from app.db.base import Base
+import app.models  # noqa: F401
+
+configure_asyncio_event_loop_policy()
 
 config = context.config
 
@@ -23,6 +27,8 @@ def get_async_database_url() -> str:
     url = make_url(settings.database_url)
     if url.drivername == "postgresql":
         url = url.set(drivername="postgresql+psycopg")
+    if "schema" in url.query:
+        url = url.difference_update_query(["schema"])
 
     return url.render_as_string(hide_password=False)
 
