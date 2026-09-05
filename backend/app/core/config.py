@@ -30,7 +30,13 @@ class Settings(BaseSettings):
         str,
         Field(validation_alias="FRONTEND_URL", default="http://localhost:3000"),
     ]
-    database_url: Annotated[str, Field(validation_alias="DATABASE_URL", default="")]
+    database_url: Annotated[
+        str,
+        Field(
+            validation_alias="DATABASE_URL",
+            default="postgresql+psycopg://localhost:5432/ai_code_review_db",
+        ),
+    ]
     github_token: Annotated[str, Field(validation_alias="GITHUB_TOKEN", default="")]
     github_webhook_secret: Annotated[
         str,

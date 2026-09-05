@@ -1,8 +1,20 @@
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.v1.router import api_router
 from app.core.config import settings
+from app.db.session import dispose_db_engine
+
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
+    try:
+        yield
+    finally:
+        await dispose_db_engine()
 
 
 def create_app() -> FastAPI:
@@ -11,6 +23,7 @@ def create_app() -> FastAPI:
         version=settings.app_version,
         description="Backend API for automated GitHub Pull Request analysis and code review.",
         debug=settings.debug,
+        lifespan=lifespan,
     )
 
     app.add_middleware(

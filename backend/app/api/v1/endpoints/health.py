@@ -12,6 +12,20 @@ class HealthResponse(BaseModel):
     environment: str
 
 
+class ReadinessResponse(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    status: str
+    database: str
+
+
+class ReadinessUnavailableResponse(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    status: str
+    database: str
+
+
 def get_health() -> HealthResponse:
     return HealthResponse(
         status="healthy",
