@@ -1,4 +1,5 @@
-export function formatDate(value: string) {
+export function formatDate(value: string | null, fallback = "Not available") {
+  if (!value || !Number.isFinite(Date.parse(value))) return fallback;
   return new Intl.DateTimeFormat("en-US", {
     month: "short",
     day: "numeric",

@@ -23,7 +23,6 @@ import {
 } from "lucide-react";
 import { navigation } from "@/lib/navigation";
 import { PRODUCT_NAME, PRODUCT_SUBTITLE, PROJECT_URL } from "@/lib/constants";
-import { pullRequests, repositories } from "@/lib/mock-data";
 import { Badge, Button, Input } from "@/components/ui";
 const icons = {
   dashboard: LayoutDashboard,
@@ -46,7 +45,13 @@ export function ThemeToggle() {
     </Button>
   );
 }
-export function DashboardShell({ children }: { children: React.ReactNode }) {
+export function DashboardShell({
+  children,
+  connected,
+}: {
+  children: React.ReactNode;
+  connected: boolean;
+}) {
   const pathname = usePathname();
   const [collapsed, setCollapsed] = useState(false);
   const [query, setQuery] = useState("");
@@ -54,16 +59,6 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
   const search = useRef<HTMLDialogElement>(null);
   const notifications = useRef<HTMLDialogElement>(null);
   const current = navigation.find((n) => pathname.startsWith(n.href));
-  const searchItems = [
-    ...repositories.map((r) => ({
-      title: `${r.owner}/${r.name}`,
-      href: `/repositories/${r.id}`,
-    })),
-    ...pullRequests.map((p) => ({
-      title: `#${p.number} ${p.title}`,
-      href: `/pull-requests/${p.id}`,
-    })),
-  ].filter((item) => item.title.toLowerCase().includes(query.toLowerCase()));
   const renderNav = (mobile = false) => (
     <nav
       aria-label={mobile ? "Mobile navigation" : "Main navigation"}
@@ -76,6 +71,7 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
           <Link
             key={n.href}
             href={n.href}
+            prefetch={false}
             aria-current={active ? "page" : undefined}
             title={n.label}
             onClick={() => drawer.current?.close()}
@@ -127,11 +123,15 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
             className={`bordered rounded-md p-3 ${collapsed ? "hidden" : "hidden xl:block"}`}
           >
             <div className="mb-2 flex items-center gap-2">
-              <span className="h-1.5 w-1.5 rounded-full bg-[var(--green)]" />
-              <span className="text-xs font-medium">Demo workspace</span>
+              <span
+                className={`h-1.5 w-1.5 rounded-full ${connected ? "bg-[var(--green)]" : "bg-[var(--amber)]"}`}
+              />
+              <span className="text-xs font-medium">
+                {connected ? "Live API" : "API unavailable"}
+              </span>
             </div>
             <p className="muted text-[11px] leading-relaxed">
-              A snapshot of your code review workflow.
+              Repository and pull request workspace.
             </p>
           </div>
           <a
@@ -187,7 +187,9 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
               <Search size={15} />
             </Button>
             <span className="hidden min-[400px]:inline">
-              <Badge>Demo data</Badge>
+              <Badge tone={connected ? "active" : "pending"}>
+                {connected ? "Live API" : "API unavailable"}
+              </Badge>
             </span>
             <Button
               className="icon-button"
@@ -212,13 +214,18 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
           className="mx-auto max-w-[1600px] min-w-0 p-4 sm:p-8"
           tabIndex={-1}
         >
+          <div className="mb-4 min-[400px]:hidden">
+            <Badge tone={connected ? "active" : "pending"}>
+              {connected ? "Live API" : "API unavailable"}
+            </Badge>
+          </div>
           {children}
         </main>
         <footer className="muted flex flex-wrap justify-between gap-2 px-4 pb-6 text-[10px] sm:px-8">
           <span>
             {PRODUCT_NAME} / {PRODUCT_SUBTITLE}
           </span>
-          <span>Demo data · Backend integration pending</span>
+          <span>Read-only workspace · GitHub synchronization via CLI</span>
         </footer>
       </div>
       <dialog ref={drawer} className="w-72" aria-label="Navigation">
@@ -253,27 +260,27 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
             <X size={16} />
           </Button>
         </div>
-        <Input
-          label="Search repositories and pull requests"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder="Repository or pull request title"
-        />
-        <div className="mt-4 max-h-80 overflow-y-auto">
-          {searchItems.map((item) => (
-            <Link
-              className="row row-link block text-sm"
-              href={item.href}
-              key={item.href}
-              onClick={() => search.current?.close()}
-            >
-              {item.title}
-            </Link>
-          ))}
-          {searchItems.length === 0 && (
-            <p className="muted py-5">No matching records.</p>
-          )}
-        </div>
+        <form action="/repositories" method="get">
+          <Input
+            label="Search repositories"
+            name="search"
+            maxLength={200}
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Owner or repository name"
+          />
+          <Button className="primary mt-4" type="submit">
+            Search
+          </Button>
+        </form>
+        <Link
+          href="/pull-requests"
+          prefetch={false}
+          className="accent mt-4 block text-sm"
+          onClick={() => search.current?.close()}
+        >
+          Search pull requests
+        </Link>
       </dialog>
       <dialog ref={notifications} className="w-96" aria-label="Notifications">
         <div className="flex items-center justify-between">
@@ -287,7 +294,7 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
           </Button>
         </div>
         <p className="muted mt-5 text-sm">
-          No live notifications. This workspace uses demo data.
+          Notifications are not configured. Available in a later phase.
         </p>
       </dialog>
     </div>

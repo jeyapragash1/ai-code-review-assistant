@@ -1,10 +1,18 @@
 # CodeReview AI
 
-A responsive GitHub code review dashboard built with Next.js App Router, React, TypeScript, and Tailwind CSS. Dark mode is the default; light and system themes are supported.
+Responsive Next.js 16 dashboard displaying real PostgreSQL data through the FastAPI read APIs. No runtime mock repositories, Pull Requests, reviews, findings, risk scores, or activity charts remain. Dark, light, and system themes are supported.
 
 ## Run locally
 
-From Windows PowerShell:
+Start PostgreSQL, then synchronize GitHub and start FastAPI in PowerShell:
+
+```powershell
+cd C:\Users\Admin\OneDrive\Desktop\ai-code-review-assistant\backend
+.\.venv\Scripts\python.exe -m app.cli.sync_repository
+.\.venv\Scripts\python.exe -m uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
+```
+
+In a second PowerShell window:
 
 ```powershell
 cd C:\Users\Admin\OneDrive\Desktop\ai-code-review-assistant\frontend
@@ -12,65 +20,62 @@ npm ci
 npm run dev
 ```
 
-Open http://localhost:3000. Stop the server with Ctrl+C.
+Open http://localhost:3000. Stop each server with Ctrl+C. Synchronization is administrative and CLI-only; the frontend refresh button only reloads already stored backend data. The frontend never calls GitHub directly.
+
+## Configuration
+
+The safe default is also documented in `.env.local.example`:
+
+```env
+NEXT_PUBLIC_API_BASE_URL=http://127.0.0.1:8000/api/v1
+```
+
+No local environment file is needed for this default. A different deployment can configure this public value; it must be an HTTP(S) base URL without credentials, query parameters, or a fragment. Never put tokens or secrets in public environment variables. Settings displays only the URL origin. The API must be reachable from the Next.js server, not only from the user's browser.
+
+## Architecture
+
+- `src/types`: response types matching backend Pydantic schemas, including nullable fields and backend pagination.
+- `src/lib/api/client.ts`: native GET fetch, encoded URL construction, five-second timeout, no credentials, no caching, and safe error mapping. No automatic retries or polling.
+- `src/lib/api/parsers.ts`: runtime validation of untrusted JSON into typed response objects.
+- `src/lib/api/{dashboard,repositories,pull-requests}.ts`: endpoint-specific transport functions.
+- `src/lib/api/server.ts`: Server Component data loading and request-scoped dashboard deduplication. Next.js `connection()` defers API access until a request, so production builds do not need FastAPI.
+- `src/app/(dashboard)`: server-rendered pages and a template that refreshes connectivity on navigation. Only a successful dashboard request enables the Live API indicator.
+- `src/components`: reusable responsive shell, real repository/PR lists, filters, pagination, safe error/empty states, refresh button, and theme preferences.
+
+Search, filters, page size, and page are encoded in URL query parameters. Native GET filter forms reset to page 1. Previous/next links preserve filters and use backend totals; data is never paginated locally. UTC timestamp formatting handles missing timestamps explicitly. Native dialogs, semantic forms, visible focus rings, accessible control labels, and reduced-motion styles are retained.
+
+## Routes
+
+| Route                 | Data / behaviour                                     |
+| --------------------- | ---------------------------------------------------- |
+| `/`                   | Redirect to dashboard                                |
+| `/dashboard`          | Real statistics and recently updated PRs             |
+| `/repositories`       | Paginated search and active-state filtering          |
+| `/repositories/[id]`  | Database UUID, repository metadata and real PR page  |
+| `/pull-requests`      | Paginated search, repository and status filtering    |
+| `/pull-requests/[id]` | Real PR metadata and change counts                   |
+| `/reviews`            | Honest unavailable feature state                     |
+| `/reviews/[id]`       | Not found; no mock review IDs accepted               |
+| `/settings`           | Local theme, API connectivity, real repository count |
+
+The six consumed endpoints are `/dashboard/statistics`, `/repositories`, `/repositories/{id}`, `/repositories/{id}/pull-requests`, `/pull-requests`, and `/pull-requests/{id}`, relative to the API base. Unknown/invalid detail IDs show the not-found page. Reviews and findings have no backend implementation yet; dashboard zeros come from the backend, and no analysis is fabricated. Authentication, AI configuration, notifications, and GitHub App installation are not configured by this UI.
 
 ## Verification
 
+Use Node.js 24 for the lightweight built-in test runner with TypeScript stripping:
+
 ```powershell
+npm test
 npm run lint
 npx tsc --noEmit
 npm run build
 npm run start
 ```
 
-The production server runs on http://localhost:3000. Stop it with Ctrl+C.
+Tests exercise URL construction, pagination, typed response validation, safe transport errors, credential omission, and rejection of mock IDs. They mock fetch and do not require GitHub or FastAPI. Production builds must succeed with FastAPI stopped; runtime pages remain dynamic. The production server defaults to http://localhost:3000.
 
-## Routes
+## Troubleshooting
 
-| Route                 | Purpose                                                           |
-| --------------------- | ----------------------------------------------------------------- |
-| `/`                   | Redirects to `/dashboard`                                         |
-| `/dashboard`          | Statistics, activity, severity, recent reviews, repository health |
-| `/repositories`       | Search and filter repositories                                    |
-| `/repositories/[id]`  | Repository activity, PRs, and findings                            |
-| `/pull-requests`      | Search and filter PRs by repository, state, and risk              |
-| `/pull-requests/[id]` | Changes, latest findings, and review history                      |
-| `/reviews`            | Filterable review history                                         |
-| `/reviews/[id]`       | Review summary, timings, severity, and detailed findings          |
-| `/settings`           | Local demonstration preferences and theme                         |
+If FastAPI is stopped or PostgreSQL is unavailable, the shell remains usable and data pages display API unavailable with refresh and startup guidance. There is no fallback to mock data. Start the backend with the command above, then Refresh. A successful repository sync does not manufacture PRs: a repository with no GitHub PRs correctly displays an empty list. Validation failures and unexpected errors have separate safe messages; raw backend errors are never shown.
 
-Example detail paths: `/repositories/atlas-api`, `/pull-requests/pr-142`, and `/reviews/rev-1048`. Unknown IDs display a not-found view. `/reviews/rev-1049` demonstrates processing, `/reviews/rev-1043` demonstrates failure, and `/reviews/rev-1044` has no findings.
-
-## Architecture
-
-- `src/app`: server-rendered routes, dashboard layout, loading, error, and not-found boundaries.
-- `src/components/layout`: responsive navigation, native-dialog mobile drawer, workspace search, notifications, and theme toggle.
-- `src/components/ui`: buttons, badges, cards, inputs, selects, table, skeleton, empty state, stat cards, breadcrumbs, risk summary, and external links.
-- `src/components/charts`: responsive Recharts activity and severity charts with deterministic data and textual summaries.
-- Domain component folders: dashboard, repositories, pull-requests, reviews, findings, and settings.
-- `src/types`: explicit domain interfaces and union types.
-- `src/lib/mock-data.ts`: centralized fixtures and derived selectors.
-- `src/lib/constants.ts`: product details and future API base configuration.
-- `src/providers`: next-themes provider.
-
-Client components are used for filters, dialogs, local preferences, feedback, and chart rendering. Route lookup and detail composition remain Server Components. Chart dimensions are fixed responsively; animations are disabled. Native dialogs support Escape, focus containment, and focus restoration. Focus rings, labeled controls, text severity labels, and reduced-motion styles support accessibility.
-
-## Mock data
-
-All repository, pull request, review, and finding relationships use stable IDs. Counts, risk levels, and activity are computed from the same collections. Dates are a fixed September 2026 snapshot formatted in UTC. A processing or failed review is marked not assessed rather than clear. Repository risk summarizes all stored findings; PR risk uses its latest review. Successful review count includes only completed analyses.
-
-Repositories and contributors are fictional. Their external links open GitHub search, not an invented repository or pull request URL. The sidebar links to the real project repository. Insecure sample code exists only as escaped text in finding previews and is never executed.
-
-Connecting repositories is unavailable. Feedback reports local selection without submission. Review and notification preferences are temporary local state and do not affect the fixture snapshot. Theme preference alone persists in browser storage. No authentication or network-backed operations are implemented.
-
-## Environment
-
-`frontend/.env.local.example` documents the future configuration:
-
-```env
-NEXT_PUBLIC_API_BASE_URL=http://127.0.0.1:8000/api/v1
-```
-
-`API_BASE_URL` has this same fallback. It is intentionally not used for HTTP requests yet. Real `.env.local` files remain ignored. Never put secrets in `NEXT_PUBLIC_` variables because they are public browser configuration.
-
-Backend integration, live GitHub data, AI calls, authentication, and server settings persistence are intentionally deferred.
+Theme preference alone persists locally in the browser. No settings are submitted to the backend. Real GitHub synchronization and private backend configuration remain outside the frontend.

@@ -1,14 +1,22 @@
 import { ExternalLink } from "lucide-react";
-export function GitHubLink({ query }: { query: string }) {
+export function GitHubLink({ url }: { url: string | null }) {
+  let safe: URL;
+  try {
+    safe = new URL(url ?? "");
+    if (
+      safe.protocol !== "https:" ||
+      safe.hostname !== "github.com" ||
+      safe.username ||
+      safe.password
+    )
+      return null;
+  } catch {
+    return null;
+  }
   return (
-    <a
-      className="button"
-      href={`https://github.com/search?q=${encodeURIComponent(query)}&type=repositories`}
-      target="_blank"
-      rel="noreferrer"
-    >
+    <a className="button" href={safe.href} target="_blank" rel="noreferrer">
       <ExternalLink size={14} />
-      GitHub search <span className="muted text-[10px]">Demo</span>
+      View on GitHub
     </a>
   );
 }

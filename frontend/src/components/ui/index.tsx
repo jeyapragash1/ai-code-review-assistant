@@ -1,14 +1,12 @@
 import Link from "next/link";
-import { ChevronRight, SearchX, ShieldCheck } from "lucide-react";
+import { ChevronRight, SearchX } from "lucide-react";
 import type {
   ButtonHTMLAttributes,
   InputHTMLAttributes,
   ReactNode,
   SelectHTMLAttributes,
 } from "react";
-import type { ReviewFinding } from "@/types";
 import { label } from "@/lib/utils";
-import { SEVERITIES } from "@/lib/constants";
 export function Button({
   className = "",
   ...props
@@ -29,17 +27,6 @@ export function StatusBadge({ status }: { status: string }) {
     <Badge tone={status}>
       <span aria-hidden="true">&#9679;</span>
       {label(status)}
-    </Badge>
-  );
-}
-export function SeverityBadge({ severity }: { severity: string }) {
-  return (
-    <Badge tone={severity}>
-      {severity === "clear"
-        ? "No findings"
-        : severity === "pending"
-          ? "Not assessed"
-          : `${label(severity)} risk`}
     </Badge>
   );
 }
@@ -166,20 +153,6 @@ export function Breadcrumbs({
         </span>
       ))}
     </nav>
-  );
-}
-export function RiskSummary({ findings }: { findings: ReviewFinding[] }) {
-  return (
-    <div className="flex flex-wrap items-center gap-3">
-      {SEVERITIES.map((s) => (
-        <Badge key={s} tone={s}>
-          {findings.filter((f) => f.severity === s).length} {label(s)}
-        </Badge>
-      ))}
-      {findings.length === 0 && (
-        <ShieldCheck size={17} className="text-[var(--green)]" />
-      )}
-    </div>
   );
 }
 export function Skeleton() {
