@@ -36,7 +36,15 @@ Copy-Item .env.example .env
 python -m uvicorn app.main:app --reload
 ```
 
-The API documentation is available at:
+Windows development note:
+
+On Windows, keep `--reload` for local development with the installed Uvicorn/Psycopg versions. Plain `python -m uvicorn` can create a Proactor event loop before importing the app, which Psycopg async does not support. For a server without reload, configure the Selector policy before Uvicorn starts:
+
+```powershell
+python -c "from app.core.asyncio import configure_asyncio_event_loop_policy; configure_asyncio_event_loop_policy(); import uvicorn; uvicorn.run('app.main:app', host='127.0.0.1', port=8000)"
+```
+
+Documentation URLs:
 
 - `http://127.0.0.1:8000/docs`
 - `http://127.0.0.1:8000/redoc`
@@ -111,3 +119,62 @@ Signature verification uses HMAC-SHA256 with `GITHUB_WEBHOOK_SECRET` over the ex
 `X-GitHub-Delivery` is the idempotency key. Duplicate delivery IDs never create a second `webhook_events` row.
 
 For safe local testing, use a disposable secret in `.env`, calculate `X-Hub-Signature-256` over the exact request body bytes, and send only synthetic JSON payloads. Never expose the webhook secret, signature, raw request body, decoded payload, tokens, or repository source code in logs, screenshots, terminal output, or commits.
+
+## Repository and Pull Request Synchronization
+
+The administrative CLI uses GitHub REST API -> typed Pydantic normalization -> repository stores -> one PostgreSQL transaction. HTTP access lives in `app/clients/github.py`, orchestration in `app/services/github/repository_sync.py`, persistence in `app/repositories/`, and explicit API response contracts in `app/schemas/`. Webhook receipt remains independent of synchronization.
+
+Public repositories work without a token. Empty values and placeholders such as `replace-with-github-token` are treated as missing; no Authorization header is sent. An optional genuine `GITHUB_TOKEN` is used as a bearer token, and GitHub decides whether it is valid. Authentication failures are not retried or silently downgraded to anonymous access. Never print tokens or headers.
+
+Safe defaults (already used when absent from your existing private `.env`):
+
+```env
+GITHUB_API_BASE_URL=https://api.github.com
+GITHUB_API_VERSION=2026-03-10
+GITHUB_REPOSITORY_OWNER=Jeyapragash1
+GITHUB_REPOSITORY_NAME=ai-code-review-assistant
+GITHUB_REQUEST_TIMEOUT_SECONDS=15
+GITHUB_MAX_RETRIES=3
+```
+
+The base URL is restricted to GitHub's official API. Version `2026-03-10` is the newest supported version checked against [GitHub's official version documentation](https://docs.github.com/en/rest/about-the-rest-api/api-versions). Requests send `application/vnd.github+json`, the version header, and a descriptive User-Agent. Owner and repository path segments are validated, redirects are not followed, and pagination links must remain on the same trusted endpoint with an advancing page number. Only the validated page number is reused; arbitrary link URLs are never requested.
+
+The client follows all pages with `state=all`, `sort=updated`, and `direction=desc`, deduplicates PR numbers, and retrieves each PR's details for accurate additions, deletions, changed files, and merged status. Detail requests are sequential (concurrency one). Connection and response timeouts are bounded. Network failures and selected 429/5xx responses have bounded retries; authentication, permission, validation, and not-found responses do not. Short Retry-After delays are respected. A delay exceeding five seconds aborts safely for a later manual run instead of sleeping indefinitely or retrying early.
+
+Run from `backend/` after activating the Python 3.12 virtual environment:
+
+```powershell
+python -m alembic upgrade head
+python -m alembic current
+python -m alembic check
+python -m app.cli.sync_repository
+# Optional validated administrative overrides:
+python -m app.cli.sync_repository --owner Jeyapragash1 --repo ai-code-review-assistant
+```
+
+The CLI prints only a typed summary (repository created/updated; PRs created/updated/unchanged; total processed; UTC synchronization time). Failures return exit code 1 with a safe message. HTTP and database resources are closed. It never prints upstream bodies, tokens, connection strings, or SQL exceptions. Synchronization is CLI-only; there is no public POST sync route.
+
+All remote reads finish before a database transaction starts. A transaction-scoped advisory lock serializes sync writers for one GitHub repository ID. PostgreSQL unique constraints and conflict-aware inserts preserve UUIDs and prevent duplicate repositories/PRs. Newer stored GitHub timestamps are not overwritten by older snapshots. Repository installation IDs and local active preferences are preserved. `last_synced_at` advances even for unchanged PRs; this timestamp alone does not count as a content update. Any persistence failure rolls back the entire write transaction. No synchronization path deletes existing rows.
+
+Repository metadata now includes HTML URL, description, primary language, privacy, GitHub update time, and sync time. PR metadata includes draft state, diff statistics, and sync time. New metadata columns are nullable for preexisting unsynchronized rows; null means unknown, not zero. Successfully synchronized records populate these values from GitHub. Database checks reject negative diff statistics. Existing migrations and webhook tables are preserved.
+
+Migration `2b28dd1f97e6` adds this metadata on top of ingestion revision `3e822f7f035f`. Its downgrade removes only the new metadata fields, indexes, and checks; it leaves ingestion tables and their original constraints intact.
+
+GitHub pagination is not a snapshot: PR updates during a long run can shift page boundaries. Duplicate numbers are deduplicated; no absent record is deleted, and another CLI run refreshes the data. No background worker or periodic synchronization is configured.
+
+## Read-only Data APIs
+
+- `GET /api/v1/dashboard/statistics`
+- `GET /api/v1/repositories`
+- `GET /api/v1/repositories/{repository_id}`
+- `GET /api/v1/repositories/{repository_id}/pull-requests`
+- `GET /api/v1/pull-requests`
+- `GET /api/v1/pull-requests/{pull_request_id}`
+
+Details use internal UUIDs. Lists return `items`, `total`, `page`, `page_size`, and `total_pages`; empty lists have zero total pages. `page` starts at 1 (maximum 1,000,000), and `page_size` defaults to 20 with a maximum of 100. Invalid parameters return 422, unknown detail records return 404, and database failures return generic 503 responses.
+
+Repository filters: `search` (literal case-insensitive substring of full name) and `is_active`. PR filters: `search` (title or author), `repository_id`, and `status=open|closed|merged`. Nested repository PRs support pagination and status. Search is limited to 200 characters and escapes SQL LIKE wildcards. Repository lists order by last sync/local update; PRs order by GitHub update time, nulls last. Both use UUID tie-breakers. Grouped SQL counts and joined repository summaries avoid N+1 queries.
+
+Dashboard statistics count active repositories and real PR states, and include the five most recently updated stored PRs. Reviews, findings, and high-severity findings are honestly zero because those systems do not exist yet. No mock data, fabricated risk scores, or review activity is returned. The frontend remains unchanged and still uses its own demo data until a later integration task.
+
+See [API examples](../docs/api/read-api.md). Automated tests use HTTPX MockTransport and dependency/session doubles; they never call GitHub or insert production test data.

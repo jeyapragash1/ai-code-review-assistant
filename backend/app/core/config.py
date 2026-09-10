@@ -1,5 +1,5 @@
 from functools import lru_cache
-from typing import Annotated
+from typing import Annotated, Literal
 
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -10,6 +10,7 @@ class Settings(BaseSettings):
         env_file=".env",
         env_file_encoding="utf-8",
         extra="ignore",
+        hide_input_in_errors=True,
     )
 
     app_name: Annotated[
@@ -38,6 +39,12 @@ class Settings(BaseSettings):
         ),
     ]
     github_token: Annotated[str, Field(validation_alias="GITHUB_TOKEN", default="")]
+    github_api_base_url: Literal["https://api.github.com"] = "https://api.github.com"
+    github_api_version: Literal["2026-03-10"] = "2026-03-10"
+    github_repository_owner: str = Field(default="Jeyapragash1", pattern=r"^[A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?$")
+    github_repository_name: str = Field(default="ai-code-review-assistant", pattern=r"^[A-Za-z0-9_-][A-Za-z0-9_.-]{0,99}$")
+    github_request_timeout_seconds: float = Field(default=15, gt=0, le=60)
+    github_max_retries: int = Field(default=3, ge=0, le=5)
     github_webhook_secret: Annotated[
         str,
         Field(validation_alias="GITHUB_WEBHOOK_SECRET", default=""),

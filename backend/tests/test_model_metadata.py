@@ -133,3 +133,9 @@ def test_enum_values_are_stored_as_snake_case_values() -> None:
     assert isinstance(webhook_event_status, SQLAlchemyEnum)
     assert webhook_event_status.enums == [status.value for status in WebhookEventStatus]
     assert webhook_event_status.native_enum is False
+
+
+def test_sync_columns_and_non_negative_checks() -> None:
+    assert {"html_url", "description", "primary_language", "is_private", "github_updated_at", "last_synced_at"}.issubset(Base.metadata.tables["repositories"].columns.keys())
+    assert {"is_draft", "additions", "deletions", "changed_files", "last_synced_at"}.issubset(Base.metadata.tables["pull_requests"].columns.keys())
+    assert {f"ck_pull_requests_{field}_non_negative" for field in ("additions", "deletions", "changed_files")}.issubset(check_constraint_names("pull_requests"))
