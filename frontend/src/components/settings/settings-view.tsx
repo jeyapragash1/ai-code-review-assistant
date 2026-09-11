@@ -8,10 +8,12 @@ export function SettingsView({
   connected,
   repositoryCount,
   apiOrigin,
+  user,
 }: {
   connected: boolean;
   repositoryCount: number | null;
   apiOrigin: string;
+  user: { github_login: string; display_name: string | null; session_expires_at: string };
 }) {
   const { theme, setTheme } = useTheme();
   const mounted = useSyncExternalStore(
@@ -26,6 +28,10 @@ export function SettingsView({
         description="Local appearance and backend connection information."
         action={<RefreshButton />}
       />
+      <section className="border-b border-[var(--border)] pb-6">
+        <h2 className="section-title mb-4">Signed-in account</h2>
+        <dl className="space-y-3 text-sm"><div><dt className="muted text-xs">GitHub account</dt><dd className="mt-1">{user.display_name ?? user.github_login} <span className="muted">@{user.github_login}</span></dd></div><div><dt className="muted text-xs">Session expiry</dt><dd className="mt-1">{user.session_expires_at}</dd></div></dl>
+      </section>
       <section className="border-b border-[var(--border)] pb-6">
         <h2 className="section-title mb-4">Appearance</h2>
         <div className="max-w-sm">
@@ -63,7 +69,7 @@ export function SettingsView({
         </dl>
       </section>
       {[
-        "GitHub App installation",
+        "GitHub App repository installation",
         "AI review configuration",
         "Notification preferences",
       ].map((name) => (

@@ -238,3 +238,8 @@ STATIC_REVIEW_VALIDATION_CONFIDENCE_THRESHOLD=0.8
 The CLI prints only a concise safe JSON summary: review UUID, Pull Request number, commit SHA, status, risk, finding counts, skipped-file reason counts, and elapsed time. It never prints tokens, database URLs, request headers, raw GitHub responses, downloaded source, analyzer raw output, webhook payloads, or environment values.
 
 Gemini, GitHub comments, webhook-triggered execution, background queues, and authenticated public review-trigger endpoints remain deferred. This protects the public application surface until authentication, job controls, and publishing policy are designed.
+# Authentication
+
+Browser authentication uses the GitHub authorization-code flow with PKCE. FastAPI owns the callback and a host-only, HTTP-only `codereview_session` cookie; GitHub access tokens are used only briefly to identify the user and are never stored. The development allowlist is temporary until GitHub App installation ownership is implemented.
+
+Configure these private environment variables manually in `backend/.env`: `GITHUB_APP_CLIENT_ID`, `GITHUB_APP_CLIENT_SECRET`, `GITHUB_OAUTH_CALLBACK_URL`, `AUTH_ALLOWED_GITHUB_LOGINS`, `AUTH_SESSION_COOKIE_NAME`, `AUTH_SESSION_TTL_SECONDS`, `AUTH_OAUTH_STATE_TTL_SECONDS`, `AUTH_COOKIE_SECURE`, and `AUTH_COOKIE_SAMESITE`.

@@ -8,8 +8,9 @@ from app.models.enums import FindingCategory, FindingSeverity, FindingSource, Fi
 from app.repositories.review import ReviewFindingStore, ReviewStore
 from app.schemas.pagination import Page, PageParams
 from app.schemas.review import ReviewDetail, ReviewFindingResponse, ReviewResponse
+from app.api.v1.auth_dependencies import get_current_user
 
-router = APIRouter(tags=["reviews"])
+router = APIRouter(tags=["reviews"], dependencies=[Depends(get_current_user)])
 
 
 @router.get("/reviews", response_model=Page[ReviewResponse])

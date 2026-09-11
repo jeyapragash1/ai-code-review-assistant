@@ -48,9 +48,11 @@ export function ThemeToggle() {
 export function DashboardShell({
   children,
   connected,
+  user,
 }: {
   children: React.ReactNode;
   connected: boolean;
+  user: { github_login: string; display_name: string | null; avatar_url: string | null; profile_url: string | null };
 }) {
   const pathname = usePathname();
   const [collapsed, setCollapsed] = useState(false);
@@ -200,13 +202,11 @@ export function DashboardShell({
               <Bell size={16} />
             </Button>
             <ThemeToggle />
-            <span
-              title="Developer profile placeholder"
-              aria-label="Developer profile placeholder"
-              className="subtle hidden h-8 w-8 items-center justify-center rounded-full border border-[var(--border)] text-[10px] font-semibold sm:flex"
-            >
-              DV
-            </span>
+            <a href={user.profile_url ?? "#"} target="_blank" rel="noreferrer" title={user.github_login} className="hidden items-center gap-2 sm:flex">
+              {user.avatar_url ? <><span className="sr-only">{user.github_login}</span><span aria-hidden="true" className="h-8 w-8 rounded-full border border-[var(--border)] bg-cover bg-center" style={{ backgroundImage: `url(${user.avatar_url})` }} /></> : <span className="subtle flex h-8 w-8 items-center justify-center rounded-full border border-[var(--border)] text-[10px] font-semibold">{user.github_login.slice(0, 2).toUpperCase()}</span>}
+              <span className="hidden text-xs xl:inline">{user.display_name ?? user.github_login}</span>
+            </a>
+            <form action="/auth/logout" method="post"><Button className="hidden sm:flex" type="submit">Log out</Button></form>
           </div>
         </header>
         <main

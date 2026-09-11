@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { apiUrl, get } from "../src/lib/api/client.ts";
 import { normalizeApiBase } from "../src/lib/config.ts";
 import { ApiError, statusError } from "../src/lib/api/errors.ts";
+import { loginUrl, parseAuthenticatedUser } from "../src/lib/api/auth.ts";
 import {
   paginationQuery,
   pageHref,
@@ -190,6 +191,15 @@ test("mock IDs are not accepted as backend UUIDs", () => {
   for (const id of ["atlas-api", "pr-142", "rev-1048"])
     assert.equal(isUuid(id), false);
   assert.equal(isUuid(repository.id), true);
+});
+test("builds a safe GitHub login URL and validates authenticated identity", () => {
+  const url = new URL(loginUrl("/reviews"));
+  assert.equal(url.pathname, "/api/v1/auth/github/login");
+  assert.equal(url.searchParams.get("next"), "/reviews");
+  assert.throws(() => loginUrl("//evil.example"));
+  const user = { id: repository.id, github_user_id: 1, github_login: "test", display_name: null, email: null, avatar_url: null, profile_url: null, session_expires_at: "2026-09-01T00:00:00Z" };
+  assert.deepEqual(parseAuthenticatedUser(user), user);
+  assert.throws(() => parseAuthenticatedUser({ ...user, github_user_id: "1" }));
 });
 test("GET transport parses typed data and omits credentials", async () => {
   const original = globalThis.fetch;

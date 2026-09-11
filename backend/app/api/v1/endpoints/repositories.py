@@ -10,8 +10,9 @@ from app.repositories.repository import RepositoryStore
 from app.schemas.pagination import Page, PageParams
 from app.schemas.pull_request import PullRequestResponse
 from app.schemas.repository import RepositoryResponse
+from app.api.v1.auth_dependencies import get_current_user
 
-router = APIRouter(prefix="/repositories", tags=["repositories"])
+router = APIRouter(prefix="/repositories", tags=["repositories"], dependencies=[Depends(get_current_user)])
 
 
 @router.get("", response_model=Page[RepositoryResponse])

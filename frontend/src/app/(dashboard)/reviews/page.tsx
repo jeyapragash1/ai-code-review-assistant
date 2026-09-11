@@ -1,4 +1,5 @@
 import type { SearchParams } from "@/types/api";
+import Link from "next/link";
 import {
   commitShaQuery,
   paginationQuery,
@@ -115,9 +116,9 @@ export default async function Page({
             <Button type="submit" className="primary">
               Apply
             </Button>
-            <a className="button" href="/reviews">
+            <Link className="button" href="/reviews">
               Clear
-            </a>
+            </Link>
           </form>
           <Card>
             <ReviewList

@@ -10,8 +10,9 @@ from app.repositories.review import ReviewStore
 from app.schemas.pagination import Page, PageParams
 from app.schemas.pull_request import PullRequestDetail, PullRequestResponse
 from app.schemas.review import ReviewResponse
+from app.api.v1.auth_dependencies import get_current_user
 
-router = APIRouter(prefix="/pull-requests", tags=["pull requests"])
+router = APIRouter(prefix="/pull-requests", tags=["pull requests"], dependencies=[Depends(get_current_user)])
 
 
 @router.get("", response_model=Page[PullRequestResponse])

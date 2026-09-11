@@ -1,5 +1,5 @@
 export type ApiErrorKind =
-  "unavailable" | "not_found" | "validation" | "unexpected";
+  "unavailable" | "unauthenticated" | "not_found" | "validation" | "unexpected";
 export class ApiError extends Error {
   readonly kind: ApiErrorKind;
   constructor(kind: ApiErrorKind) {
@@ -13,7 +13,9 @@ export function errorKind(error: unknown): ApiErrorKind {
 }
 export function statusError(status: number): ApiError {
   return new ApiError(
-    status === 404
+    status === 401
+      ? "unauthenticated"
+      : status === 404
       ? "not_found"
       : status === 422 || status === 400
         ? "validation"

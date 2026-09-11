@@ -19,13 +19,22 @@ export async function get<T>(
   segments: readonly string[],
   parse: (value: unknown) => T,
   query: Query = {},
+  cookie?: string,
 ): Promise<T> {
+  if (!cookie) {
+    try {
+      const nextHeaders = await import("next/headers");
+      cookie = (await nextHeaders.cookies()).toString();
+    } catch {
+      // Non-Next runtimes, including transport tests, have no request cookie.
+    }
+  }
   const url = apiUrl(segments, query);
   let response: Response;
   try {
     response = await fetch(url, {
       method: "GET",
-      headers: { Accept: "application/json" },
+      headers: { Accept: "application/json", ...(cookie ? { Cookie: cookie } : {}) },
       credentials: "omit",
       cache: "no-store",
       signal: AbortSignal.timeout(5000),

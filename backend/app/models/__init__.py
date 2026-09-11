@@ -15,6 +15,8 @@ from app.models.repository import Repository
 from app.models.review import Review
 from app.models.review_finding import ReviewFinding
 from app.models.webhook_event import WebhookEvent
+from app.models.user import User, UserSession
+from app.models.github_oauth_transaction import GitHubOAuthTransaction
 
 __all__ = [
     "FindingCategory",
@@ -32,4 +34,7 @@ __all__ = [
     "ReviewTriggerType",
     "WebhookEvent",
     "WebhookEventStatus",
+    "User",
+    "UserSession",
+    "GitHubOAuthTransaction",
 ]

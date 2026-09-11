@@ -9,6 +9,8 @@ from sqlalchemy.dialects import postgresql
 from sqlalchemy.exc import SQLAlchemyError
 
 from app.api.v1.read_dependencies import pull_request_store, repository_store, review_finding_store, review_store
+from app.api.v1.auth_dependencies import get_current_user
+from app.schemas.auth import AuthenticatedUser
 from app.db.session import get_db_session
 from app.main import create_app
 from app.models import (
@@ -51,6 +53,10 @@ def api():
     app.dependency_overrides[pull_request_store] = lambda: pr_store
     app.dependency_overrides[review_store] = lambda: reviews
     app.dependency_overrides[review_finding_store] = lambda: findings
+    app.dependency_overrides[get_current_user] = lambda: AuthenticatedUser(
+        id=uuid4(), github_user_id=1, github_login="test", display_name=None,
+        email=None, avatar_url=None, profile_url=None, session_expires_at=datetime.now(UTC),
+    )
     with TestClient(app) as client:
         yield client, repo_store, pr_store, reviews, findings
 
@@ -238,6 +244,7 @@ def test_review_and_finding_responses_are_explicit(api):
 
 def test_database_failure_is_safe_and_rolls_back(caplog):
     app = create_app()
+    app.dependency_overrides[get_current_user] = lambda: AuthenticatedUser(id=uuid4(), github_user_id=1, github_login="test", display_name=None, email=None, avatar_url=None, profile_url=None, session_expires_at=datetime.now(UTC))
     session = AsyncMock()
     session.add = Mock()
     session.add = Mock()
@@ -255,6 +262,7 @@ def test_database_failure_is_safe_and_rolls_back(caplog):
 
 def test_dashboard_uses_counts_and_honest_zeros():
     app = create_app()
+    app.dependency_overrides[get_current_user] = lambda: AuthenticatedUser(id=uuid4(), github_user_id=1, github_login="test", display_name=None, email=None, avatar_url=None, profile_url=None, session_expires_at=datetime.now(UTC))
     session = AsyncMock()
     connected, counts, reviews, findings, total, rows = Mock(), Mock(), Mock(), Mock(), Mock(), Mock()
     connected.scalar_one.return_value = 1
@@ -461,6 +469,7 @@ def test_review_create_and_mark_status_support_future_orchestration():
 
 def test_review_database_failure_is_safe_and_rolls_back(caplog):
     app = create_app()
+    app.dependency_overrides[get_current_user] = lambda: AuthenticatedUser(id=uuid4(), github_user_id=1, github_login="test", display_name=None, email=None, avatar_url=None, profile_url=None, session_expires_at=datetime.now(UTC))
     session = AsyncMock()
     session.execute.side_effect = SQLAlchemyError("private review details")
     async def db():

@@ -1,7 +1,7 @@
 from functools import lru_cache
 from typing import Annotated, Literal
 
-from pydantic import Field, model_validator
+from pydantic import Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -39,6 +39,15 @@ class Settings(BaseSettings):
         ),
     ]
     github_token: Annotated[str, Field(validation_alias="GITHUB_TOKEN", default="")]
+    github_app_client_id: Annotated[str, Field(validation_alias="GITHUB_APP_CLIENT_ID", default="")]
+    github_app_client_secret: Annotated[SecretStr, Field(validation_alias="GITHUB_APP_CLIENT_SECRET", default=SecretStr(""))]
+    github_oauth_callback_url: str = Field(default="http://localhost:8000/api/v1/auth/github/callback")
+    auth_allowed_github_logins: str = Field(default="jeyapragash1")
+    auth_session_cookie_name: str = Field(default="codereview_session", pattern=r"^[A-Za-z0-9_-]{1,128}$")
+    auth_session_ttl_seconds: int = Field(default=604800, ge=300, le=2_592_000)
+    auth_oauth_state_ttl_seconds: int = Field(default=600, ge=60, le=3600)
+    auth_cookie_secure: bool = Field(default=False)
+    auth_cookie_samesite: Literal["lax", "strict"] = Field(default="lax")
     github_api_base_url: Literal["https://api.github.com"] = "https://api.github.com"
     github_api_version: Literal["2026-03-10"] = "2026-03-10"
     github_repository_owner: str = Field(default="Jeyapragash1", pattern=r"^[A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?$")
@@ -103,10 +112,31 @@ class Settings(BaseSettings):
     def cors_origins(self) -> list[str]:
         return [self.frontend_url]
 
+    @property
+    def allowed_github_logins(self) -> frozenset[str]:
+        return frozenset(login.strip().lower() for login in self.auth_allowed_github_logins.split(",") if login.strip())
+
+    @property
+    def github_oauth_configured(self) -> bool:
+        return bool(self.github_app_client_id.strip() and self.github_app_client_secret.get_secret_value().strip())
+
+    @field_validator("github_oauth_callback_url")
+    @classmethod
+    def validate_callback_url(cls, value: str) -> str:
+        from urllib.parse import urlparse
+        parsed = urlparse(value)
+        if parsed.scheme not in {"http", "https"} or not parsed.netloc or parsed.query or parsed.fragment:
+            raise ValueError("GITHUB_OAUTH_CALLBACK_URL must be an absolute origin path.")
+        return value
+
     @model_validator(mode="after")
     def validate_static_review_limits(self) -> "Settings":
         if self.static_review_max_total_bytes < self.static_review_max_file_bytes:
             raise ValueError("STATIC_REVIEW_MAX_TOTAL_BYTES must be at least STATIC_REVIEW_MAX_FILE_BYTES")
+        if self.app_env != "development" and not self.auth_cookie_secure:
+            raise ValueError("AUTH_COOKIE_SECURE must be enabled outside development.")
+        if self.app_env == "development" and not self.allowed_github_logins:
+            raise ValueError("AUTH_ALLOWED_GITHUB_LOGINS is required in development.")
         return self
 
 
