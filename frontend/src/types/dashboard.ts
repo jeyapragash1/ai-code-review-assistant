@@ -5,8 +5,8 @@ export interface DashboardStatistics {
   open_pr_count: number;
   closed_pr_count: number;
   merged_pr_count: number;
-  reviews_count: 0;
-  findings_count: 0;
-  high_severity_findings_count: 0;
+  reviews_count: number;
+  findings_count: number;
+  high_severity_findings_count: number;
   recently_updated_pull_requests: PullRequest[];
 }

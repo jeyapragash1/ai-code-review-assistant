@@ -1,5 +1,3 @@
-from typing import Literal
-
 from pydantic import BaseModel
 
 from app.schemas.pull_request import PullRequestResponse
@@ -11,7 +9,7 @@ class DashboardStatistics(BaseModel):
     open_pr_count: int
     closed_pr_count: int
     merged_pr_count: int
-    reviews_count: Literal[0] = 0
-    findings_count: Literal[0] = 0
-    high_severity_findings_count: Literal[0] = 0
+    reviews_count: int
+    findings_count: int
+    high_severity_findings_count: int
     recently_updated_pull_requests: list[PullRequestResponse]

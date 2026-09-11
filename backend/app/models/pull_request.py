@@ -62,3 +62,9 @@ class PullRequest(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         "Repository",
         back_populates="pull_requests",
     )
+    reviews: Mapped[list[Review]] = relationship(
+        "Review",
+        back_populates="pull_request",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )

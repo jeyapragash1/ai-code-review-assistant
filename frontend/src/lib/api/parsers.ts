@@ -49,9 +49,6 @@ function uuid(v: unknown): string {
 function array<T>(v: unknown, parse: (v: unknown) => T): T[] {
   return Array.isArray(v) ? v.map(parse) : fail();
 }
-function zero(v: unknown): 0 {
-  return v === 0 ? 0 : fail();
-}
 export function parseStatus(v: unknown): PullRequestStatus {
   return v === "open" || v === "closed" || v === "merged" ? v : fail();
 }
@@ -139,9 +136,9 @@ export function parseDashboard(v: unknown): DashboardStatistics {
     open_pr_count: num(o.open_pr_count),
     closed_pr_count: num(o.closed_pr_count),
     merged_pr_count: num(o.merged_pr_count),
-    reviews_count: zero(o.reviews_count),
-    findings_count: zero(o.findings_count),
-    high_severity_findings_count: zero(o.high_severity_findings_count),
+    reviews_count: num(o.reviews_count),
+    findings_count: num(o.findings_count),
+    high_severity_findings_count: num(o.high_severity_findings_count),
     recently_updated_pull_requests: array(
       o.recently_updated_pull_requests,
       parsePullRequest,

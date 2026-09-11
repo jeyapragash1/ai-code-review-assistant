@@ -96,7 +96,7 @@ test("validates repository and empty paginated success bodies", () => {
   assert.deepEqual(parsePage(empty, parseRepository), empty);
   assert.throws(() => parsePage({ ...empty, total_pages: 1 }, parseRepository));
 });
-test("dashboard preserves honest zero review and finding values", () => {
+test("dashboard accepts real non-negative review and finding counts", () => {
   const data = {
     connected_repository_count: 1,
     total_pull_request_count: 0,
@@ -109,7 +109,8 @@ test("dashboard preserves honest zero review and finding values", () => {
     recently_updated_pull_requests: [],
   };
   assert.deepEqual(parseDashboard(data), data);
-  assert.throws(() => parseDashboard({ ...data, reviews_count: 10 }));
+  assert.equal(parseDashboard({ ...data, reviews_count: 10 }).reviews_count, 10);
+  assert.throws(() => parseDashboard({ ...data, findings_count: -1 }));
 });
 test("mock IDs are not accepted as backend UUIDs", () => {
   for (const id of ["atlas-api", "pr-142", "rev-1048"])

@@ -58,7 +58,7 @@ Search, filters, page size, and page are encoded in URL query parameters. Native
 | `/reviews/[id]`       | Not found; no mock review IDs accepted               |
 | `/settings`           | Local theme, API connectivity, real repository count |
 
-The six consumed endpoints are `/dashboard/statistics`, `/repositories`, `/repositories/{id}`, `/repositories/{id}/pull-requests`, `/pull-requests`, and `/pull-requests/{id}`, relative to the API base. Unknown/invalid detail IDs show the not-found page. Reviews and findings have no backend implementation yet; dashboard zeros come from the backend, and no analysis is fabricated. Authentication, AI configuration, notifications, and GitHub App installation are not configured by this UI.
+The six consumed frontend endpoints are `/dashboard/statistics`, `/repositories`, `/repositories/{id}`, `/repositories/{id}/pull-requests`, `/pull-requests`, and `/pull-requests/{id}`, relative to the API base. Unknown/invalid detail IDs show the not-found page. Review and finding tables may exist in the backend, but the review engine is not connected yet; dashboard counts come from the backend, and no analysis is fabricated. Authentication, AI configuration, notifications, and GitHub App installation are not configured by this UI.
 
 ## Verification
 

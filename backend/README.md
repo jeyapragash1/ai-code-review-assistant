@@ -60,13 +60,16 @@ python -m pytest
 
 The backend uses SQLAlchemy 2 async sessions with Psycopg 3. FastAPI disposes database connections during application shutdown.
 
-The first GitHub ingestion tables are:
+The GitHub ingestion and review-foundation tables are:
 
 - `repositories`: stores synchronized GitHub repository identity and display metadata. It does not store GitHub tokens or secrets.
 - `pull_requests`: stores pull request identity and review-target metadata for a repository. Pull requests are deleted when their stored repository is deleted.
 - `webhook_events`: stores unique GitHub webhook deliveries for later asynchronous processing and retry support.
+- `reviews`: stores one review run for a Pull Request commit/attempt, including safe status, trigger, model metadata, timing, token usage, estimated cost, and safe error information. Reviews are deleted when their stored Pull Request is deleted.
+- `review_findings`: stores individual findings for a review, including file/line location, severity, category, source, confidence, deterministic fingerprint, optional safe snippet, and GitHub publication metadata. Findings are deleted when their stored review is deleted.
 
 Webhook payloads may contain sensitive metadata. Do not log, print, or expose raw webhook payload contents.
+Review prompts, provider secrets, raw API keys, webhook payloads, and database URLs are not stored in the review tables and must not be exposed through logs or API responses.
 
 Alembic is configured for async SQLAlchemy and reads `DATABASE_URL` from the application settings:
 
@@ -170,11 +173,20 @@ GitHub pagination is not a snapshot: PR updates during a long run can shift page
 - `GET /api/v1/repositories/{repository_id}/pull-requests`
 - `GET /api/v1/pull-requests`
 - `GET /api/v1/pull-requests/{pull_request_id}`
+- `GET /api/v1/pull-requests/{pull_request_id}/reviews`
+- `GET /api/v1/reviews`
+- `GET /api/v1/reviews/{review_id}`
+- `GET /api/v1/reviews/{review_id}/findings`
+- `GET /api/v1/review-findings/{finding_id}`
 
 Details use internal UUIDs. Lists return `items`, `total`, `page`, `page_size`, and `total_pages`; empty lists have zero total pages. `page` starts at 1 (maximum 1,000,000), and `page_size` defaults to 20 with a maximum of 100. Invalid parameters return 422, unknown detail records return 404, and database failures return generic 503 responses.
 
 Repository filters: `search` (literal case-insensitive substring of full name) and `is_active`. PR filters: `search` (title or author), `repository_id`, and `status=open|closed|merged`. Nested repository PRs support pagination and status. Search is limited to 200 characters and escapes SQL LIKE wildcards. Repository lists order by last sync/local update; PRs order by GitHub update time, nulls last. Both use UUID tie-breakers. Grouped SQL counts and joined repository summaries avoid N+1 queries.
 
-Dashboard statistics count active repositories and real PR states, and include the five most recently updated stored PRs. Reviews, findings, and high-severity findings are honestly zero because those systems do not exist yet. No mock data, fabricated risk scores, or review activity is returned. The frontend remains unchanged and still uses its own demo data until a later integration task.
+Review filters: `pull_request_id`, `repository_id`, `status`, `overall_risk`, and `commit_sha`. Finding filters: `severity`, `category`, `status`, `source`, and `file_path`. Review statuses are `queued`, `fetching`, `static_analysis`, `ai_analysis`, `validating`, `publishing`, `completed`, and `failed`. Risk values are `none`, `low`, `medium`, and `high`. Finding severity values are `high`, `medium`, and `low`.
+
+Dashboard statistics count active repositories, real PR states, real review rows, real finding rows, and real high-severity findings. No mock data, fabricated risk scores, or review activity is returned. Until the review engine exists, review/finding counts remain zero unless rows are created by a future internal orchestration path.
+
+The review tables are read-only over HTTP in this phase. Internal repository helpers can create review runs, mark review status, and insert findings idempotently by fingerprint for future orchestration, but there are no public create/update/delete review routes.
 
 See [API examples](../docs/api/read-api.md). Automated tests use HTTPX MockTransport and dependency/session doubles; they never call GitHub or insert production test data.

@@ -14,6 +14,7 @@ from app.api.v1.endpoints.health import (
 from app.api.v1.endpoints.webhooks import router as webhooks_router
 from app.api.v1.endpoints.repositories import router as repositories_router
 from app.api.v1.endpoints.pull_requests import router as pull_requests_router
+from app.api.v1.endpoints.reviews import router as reviews_router
 from app.api.v1.endpoints.dashboard import router as dashboard_router
 from app.db.health import check_database_connection
 from app.db.session import get_db_session
@@ -24,6 +25,7 @@ api_router = APIRouter()
 api_router.include_router(webhooks_router)
 api_router.include_router(repositories_router)
 api_router.include_router(pull_requests_router)
+api_router.include_router(reviews_router)
 api_router.include_router(dashboard_router)
 
 

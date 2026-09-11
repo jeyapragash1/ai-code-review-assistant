@@ -3,11 +3,13 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
-from app.api.v1.read_dependencies import pull_request_store
+from app.api.v1.read_dependencies import pull_request_store, review_store
 from app.models.enums import PullRequestStatus
 from app.repositories.pull_request import PullRequestStore
+from app.repositories.review import ReviewStore
 from app.schemas.pagination import Page, PageParams
 from app.schemas.pull_request import PullRequestDetail, PullRequestResponse
+from app.schemas.review import ReviewResponse
 
 router = APIRouter(prefix="/pull-requests", tags=["pull requests"])
 
@@ -29,3 +31,15 @@ async def pull_request_detail(pull_request_id: UUID, store: Annotated[PullReques
     if record is None:
         raise HTTPException(404, "Pull request not found.")
     return record
+
+
+@router.get("/{pull_request_id}/reviews", response_model=Page[ReviewResponse])
+async def pull_request_reviews(
+    pull_request_id: UUID,
+    prs: Annotated[PullRequestStore, Depends(pull_request_store)],
+    reviews: Annotated[ReviewStore, Depends(review_store)],
+    pagination: Annotated[PageParams, Depends()],
+) -> Page[ReviewResponse]:
+    if await prs.get(pull_request_id) is None:
+        raise HTTPException(404, "Pull request not found.")
+    return await reviews.list(pagination, pull_request_id=pull_request_id)

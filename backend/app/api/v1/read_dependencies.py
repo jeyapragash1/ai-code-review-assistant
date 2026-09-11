@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.session import get_db_session
 from app.repositories.pull_request import PullRequestStore
 from app.repositories.repository import RepositoryStore
+from app.repositories.review import ReviewFindingStore, ReviewStore
 
 
 async def read_session(session: Annotated[AsyncSession, Depends(get_db_session)]) -> AsyncIterator[AsyncSession]:
@@ -26,3 +27,11 @@ def repository_store(session: Annotated[AsyncSession, Depends(read_session)]) ->
 
 def pull_request_store(session: Annotated[AsyncSession, Depends(read_session)]) -> PullRequestStore:
     return PullRequestStore(session)
+
+
+def review_store(session: Annotated[AsyncSession, Depends(read_session)]) -> ReviewStore:
+    return ReviewStore(session)
+
+
+def review_finding_store(session: Annotated[AsyncSession, Depends(read_session)]) -> ReviewFindingStore:
+    return ReviewFindingStore(session)
