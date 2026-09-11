@@ -1,4 +1,5 @@
 import asyncio
+import base64
 from unittest.mock import AsyncMock
 
 import httpx
@@ -17,7 +18,7 @@ def settings(token: str = "") -> Settings:
     return Settings(_env_file=None, GITHUB_TOKEN=token)
 
 
-@pytest.mark.parametrize("token,authorized", [("", False), ("replace-with-github-token", False), ("  ", False), ("your-github-token", False), ("ghp_testcredential", True)])
+@pytest.mark.parametrize("token,authorized", [("", False), ("replace-with-github-token", False), ("  ", False), ("your-github-token", False), ("valid_test_token", True)])
 def test_headers_and_optional_authentication(token, authorized, caplog):
     def handler(request):
         assert request.headers["Accept"] == "application/vnd.github+json"
@@ -35,7 +36,7 @@ def test_headers_and_optional_authentication(token, authorized, caplog):
             assert result.primary_language == "Python"
             assert result.github_updated_at.tzinfo is not None
     asyncio.run(run())
-    assert "ghp_testcredential" not in caplog.text
+    assert "valid_test_token" not in caplog.text
 
 
 @pytest.mark.parametrize("state,merged,expected", [("open", None, "open"), ("closed", None, "closed"), ("closed", "2026-09-01T12:00:00Z", "merged")])
@@ -132,9 +133,65 @@ def test_retries_are_bounded(monkeypatch):
 @pytest.mark.parametrize("link", ["https://evil.example/repos/octocat/example/pulls?page=2", "https://api.github.com/other?page=2", "https://api.github.com/repos/octocat/example/pulls?page=1"])
 def test_untrusted_pagination_is_rejected(link):
     async def run():
-        async with GitHubClient(settings("ghp_testcredential"), transport=httpx.MockTransport(lambda _: httpx.Response(200, json=[], headers={"Link": f'<{link}>; rel="next"'}))) as client:
+        async with GitHubClient(settings("valid_test_token"), transport=httpx.MockTransport(lambda _: httpx.Response(200, json=[], headers={"Link": f'<{link}>; rel="next"'}))) as client:
             with pytest.raises(GitHubError, match="pagination"):
                 await client.pull_requests(TARGET)
+    asyncio.run(run())
+
+
+def test_changed_file_pagination_and_exact_head_content():
+    seen = []
+    content = base64.b64encode(b"print('safe to parse only')\n").decode()
+
+    def handler(request):
+        seen.append((request.url.path, dict(request.url.params)))
+        if request.url.path.endswith("/pulls/1/files"):
+            assert request.url.params["per_page"] == "100"
+            if request.url.params["page"] == "1":
+                return httpx.Response(
+                    200,
+                    json=[{"filename": "old.py", "status": "removed", "additions": 0, "deletions": 2, "changes": 2}],
+                    headers={"Link": '<https://api.github.com/repos/octocat/example/pulls/1/files?page=2>; rel="next"'},
+                )
+            return httpx.Response(200, json=[{
+                "filename": "src/new.py",
+                "previous_filename": "src/old.py",
+                "status": "renamed",
+                "additions": 1,
+                "deletions": 0,
+                "changes": 1,
+                "patch": "@@ -0,0 +1 @@",
+            }])
+        if request.url.path.endswith("/contents/src/new.py"):
+            assert request.url.params["ref"] == "a" * 40
+            return httpx.Response(200, json={"type": "file", "encoding": "base64", "size": 28, "content": content})
+        return httpx.Response(404)
+
+    async def run():
+        async with GitHubClient(settings(), transport=httpx.MockTransport(handler)) as client:
+            files = await client.pull_request_files(TARGET, 1, "a" * 40)
+            assert [item.filename for item in files] == ["old.py", "src/new.py"]
+            assert files[1].previous_filename == "src/old.py"
+            assert files[1].head_sha == "a" * 40
+            assert await client.file_content(TARGET, "src/new.py", "a" * 40, 100) == b"print('safe to parse only')\n"
+
+    asyncio.run(run())
+    assert seen[0][0] == "/repos/octocat/example/pulls/1/files"
+
+
+def test_invalid_changed_file_metadata_is_safe():
+    async def run():
+        async with GitHubClient(settings(), transport=httpx.MockTransport(lambda _: httpx.Response(200, json=[{"filename": "", "status": "modified"}]))) as client:
+            with pytest.raises(GitHubError, match="file metadata"):
+                await client.pull_request_files(TARGET, 1, "a" * 40)
+    asyncio.run(run())
+
+
+def test_invalid_content_metadata_is_safe():
+    async def run():
+        async with GitHubClient(settings(), transport=httpx.MockTransport(lambda _: httpx.Response(200, json={"type": "symlink", "size": 1}))) as client:
+            with pytest.raises(GitHubError, match="unsupported file content"):
+                await client.file_content(TARGET, "src/app.py", "a" * 40, 100)
     asyncio.run(run())
 
 

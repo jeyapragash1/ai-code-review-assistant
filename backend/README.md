@@ -190,3 +190,51 @@ Dashboard statistics count active repositories, real PR states, real review rows
 The review tables are read-only over HTTP in this phase. Internal repository helpers can create review runs, mark review status, and insert findings idempotently by fingerprint for future orchestration, but there are no public create/update/delete review routes.
 
 See [API examples](../docs/api/read-api.md). Automated tests use HTTPX MockTransport and dependency/session doubles; they never call GitHub or insert production test data.
+
+## Static Review Pipeline
+
+The first real review runner is an administrative CLI-only static-analysis pipeline. It loads a synchronized Pull Request from PostgreSQL, uses its stored head SHA, fetches changed-file metadata through GitHub's Pull Request files API, downloads exact file contents from GitHub's Contents API at that head SHA, analyzes supported Python files, normalizes findings, and persists one real `reviews` row with associated `review_findings`.
+
+Run from `backend/`:
+
+```powershell
+python -m app.cli.review_pull_request --repository jeyapragash1/ai-code-review-assistant --pr-number 1
+# Or by internal database UUID:
+python -m app.cli.review_pull_request --pull-request-id <pull-request-uuid>
+# Force a new attempt for the same commit:
+python -m app.cli.review_pull_request --repository jeyapragash1/ai-code-review-assistant --pr-number 1 --force
+```
+
+Normal runs are idempotent for a Pull Request and commit SHA: if a completed review already exists, the CLI returns that review summary and does not create duplicate findings. `--force` creates the next attempt number. Attempt numbers are calculated while locking the stored Pull Request row, and the database uniqueness constraint on `(pull_request_id, commit_sha, attempt_number)` remains the final concurrency guard.
+
+Supported file type for this milestone: Python (`.py`). Deleted files, unsafe paths, unsupported extensions, binary content, unsupported encodings, oversized files, excessive total bytes, excessive patch metadata, and files beyond the changed-file limit are skipped with safe reason codes. Repository paths are normalized and rejected if they are absolute, Windows drive paths, contain null bytes, backslashes, or `..` traversal. Fetched files are written only to an application-created temporary directory, which is removed after analysis.
+
+Current static analyzers:
+
+- Bandit: JSON output for Python security findings such as SQL query construction risks. Application code invokes Bandit with controlled arguments against the temporary directory.
+- Ruff: JSON output with repository configuration disabled via `--isolated`; this milestone selects `BLE001` to catch broad exception handling without noisy formatting rules.
+- Conservative AST validation analyzer: local, explainable parameter-flow checks for obvious unvalidated function parameters reaching SQL-sensitive construction or execution. It recognizes simple local validation evidence such as type checks, comparisons, assertions, conversions, and guard clauses that raise or return. It is not full interprocedural taint analysis, so false positives and false negatives are expected.
+
+Analyzer subprocesses use argument arrays, `shell=False`, captured output, controlled working directories, minimal environment variables, and bounded timeouts. Exit codes that mean "findings detected" are treated as successful analysis. Tool crashes, timeouts, malformed JSON, GitHub fetch failures, and persistence failures are converted into safe failed-review states without tracebacks or raw tool output in API responses.
+
+Normalized findings use deterministic SHA-256 fingerprints derived from stable fields such as analyzer, rule, path, line, category, severity, and title. Volatile data, UUIDs, timestamps, absolute temporary paths, raw source, provider payloads, and secrets are not included. Findings are deduplicated, sorted deterministically, capped by `STATIC_REVIEW_MAX_FINDINGS`, and stored without snippets for now to avoid persisting accidental credentials.
+
+Static review settings:
+
+```env
+STATIC_REVIEW_MAX_CHANGED_FILES=50
+STATIC_REVIEW_MAX_FILE_BYTES=262144
+STATIC_REVIEW_MAX_TOTAL_BYTES=1048576
+STATIC_REVIEW_ANALYZER_TIMEOUT_SECONDS=10
+STATIC_REVIEW_MAX_FINDINGS=100
+STATIC_REVIEW_MAX_PATCH_BYTES=131072
+STATIC_REVIEW_MAX_TITLE_LENGTH=255
+STATIC_REVIEW_MAX_PROBLEM_LENGTH=2000
+STATIC_REVIEW_MAX_EXPLANATION_LENGTH=2000
+STATIC_REVIEW_MAX_SUGGESTION_LENGTH=2000
+STATIC_REVIEW_VALIDATION_CONFIDENCE_THRESHOLD=0.8
+```
+
+The CLI prints only a concise safe JSON summary: review UUID, Pull Request number, commit SHA, status, risk, finding counts, skipped-file reason counts, and elapsed time. It never prints tokens, database URLs, request headers, raw GitHub responses, downloaded source, analyzer raw output, webhook payloads, or environment values.
+
+Gemini, GitHub comments, webhook-triggered execution, background queues, and authenticated public review-trigger endpoints remain deferred. This protects the public application surface until authentication, job controls, and publishing policy are designed.

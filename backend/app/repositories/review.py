@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from uuid import UUID
 
-from sqlalchemy import Select, func, select
+from sqlalchemy import Select, delete, func, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -57,6 +57,80 @@ class ReviewStore:
 
     async def pull_request_exists(self, pull_request_id: UUID) -> bool:
         return (await self.session.execute(select(PullRequest.id).where(PullRequest.id == pull_request_id))).scalar_one_or_none() is not None
+
+    async def pull_request_with_repository(
+        self,
+        *,
+        pull_request_id: UUID | None = None,
+        repository_full_name: str | None = None,
+        pr_number: int | None = None,
+        lock: bool = False,
+    ) -> tuple[PullRequest, Repository] | None:
+        statement = select(PullRequest, Repository).join(Repository, PullRequest.repository_id == Repository.id)
+        if pull_request_id is not None:
+            statement = statement.where(PullRequest.id == pull_request_id)
+        elif repository_full_name is not None and pr_number is not None:
+            statement = statement.where(
+                func.lower(Repository.full_name) == repository_full_name.lower(),
+                PullRequest.github_pr_number == pr_number,
+            )
+        else:
+            raise ValueError("A pull_request_id or repository/pr_number pair is required.")
+        if lock:
+            statement = statement.with_for_update(of=PullRequest)
+        return (await self.session.execute(statement)).one_or_none()
+
+    async def completed_for_commit(self, pull_request_id: UUID, commit_sha: str) -> Review | None:
+        return (await self.session.execute(
+            select(Review)
+            .where(
+                Review.pull_request_id == pull_request_id,
+                Review.commit_sha == commit_sha,
+                Review.status == ReviewStatus.COMPLETED,
+            )
+            .order_by(Review.attempt_number.desc(), Review.started_at.desc(), Review.id)
+            .limit(1)
+        )).scalar_one_or_none()
+
+    async def next_attempt_number(self, pull_request_id: UUID, commit_sha: str) -> int:
+        current = (await self.session.execute(
+            select(func.coalesce(func.max(Review.attempt_number), 0)).where(
+                Review.pull_request_id == pull_request_id,
+                Review.commit_sha == commit_sha,
+            )
+        )).scalar_one()
+        return int(current) + 1
+
+    async def finding_counts(self, review_id: UUID) -> tuple[int, int]:
+        total, high = (await self.session.execute(select(
+            func.count(ReviewFinding.id),
+            func.count().filter(ReviewFinding.severity == FindingSeverity.HIGH),
+        ).where(ReviewFinding.review_id == review_id))).one()
+        return int(total), int(high)
+
+    async def finding_summary_counts(self, review_id: UUID) -> tuple[int, dict[str, int], dict[str, int]]:
+        total = (await self.session.execute(
+            select(func.count()).select_from(ReviewFinding).where(ReviewFinding.review_id == review_id)
+        )).scalar_one()
+        severity_rows = (await self.session.execute(
+            select(ReviewFinding.severity, func.count())
+            .where(ReviewFinding.review_id == review_id)
+            .group_by(ReviewFinding.severity)
+        )).all()
+        category_rows = (await self.session.execute(
+            select(ReviewFinding.category, func.count())
+            .where(ReviewFinding.review_id == review_id)
+            .group_by(ReviewFinding.category)
+        )).all()
+        return (
+            int(total),
+            dict(sorted((severity.value, int(count)) for severity, count in severity_rows)),
+            dict(sorted((category.value, int(count)) for category, count in category_rows)),
+        )
+
+    async def delete_findings(self, review_id: UUID) -> None:
+        await self.session.execute(delete(ReviewFinding).where(ReviewFinding.review_id == review_id))
+        await self.session.flush()
 
     async def get(self, review_id: UUID) -> ReviewDetail | None:
         counts = self._counts_subquery()

@@ -1,7 +1,7 @@
 from functools import lru_cache
 from typing import Annotated, Literal
 
-from pydantic import Field
+from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -53,11 +53,61 @@ class Settings(BaseSettings):
         int,
         Field(validation_alias="GITHUB_WEBHOOK_MAX_BODY_BYTES", default=2 * 1024 * 1024),
     ]
+    static_review_max_changed_files: Annotated[
+        int,
+        Field(validation_alias="STATIC_REVIEW_MAX_CHANGED_FILES", default=50, ge=1, le=500),
+    ]
+    static_review_max_file_bytes: Annotated[
+        int,
+        Field(validation_alias="STATIC_REVIEW_MAX_FILE_BYTES", default=262_144, ge=1_024, le=2 * 1024 * 1024),
+    ]
+    static_review_max_total_bytes: Annotated[
+        int,
+        Field(validation_alias="STATIC_REVIEW_MAX_TOTAL_BYTES", default=1_048_576, ge=1_024, le=10 * 1024 * 1024),
+    ]
+    static_review_analyzer_timeout_seconds: Annotated[
+        float,
+        Field(validation_alias="STATIC_REVIEW_ANALYZER_TIMEOUT_SECONDS", default=10, gt=0, le=60),
+    ]
+    static_review_max_findings: Annotated[
+        int,
+        Field(validation_alias="STATIC_REVIEW_MAX_FINDINGS", default=100, ge=1, le=1_000),
+    ]
+    static_review_max_patch_bytes: Annotated[
+        int,
+        Field(validation_alias="STATIC_REVIEW_MAX_PATCH_BYTES", default=131_072, ge=1_024, le=2 * 1024 * 1024),
+    ]
+    static_review_max_title_length: Annotated[
+        int,
+        Field(validation_alias="STATIC_REVIEW_MAX_TITLE_LENGTH", default=255, ge=40, le=255),
+    ]
+    static_review_max_problem_length: Annotated[
+        int,
+        Field(validation_alias="STATIC_REVIEW_MAX_PROBLEM_LENGTH", default=2_000, ge=100, le=10_000),
+    ]
+    static_review_max_explanation_length: Annotated[
+        int,
+        Field(validation_alias="STATIC_REVIEW_MAX_EXPLANATION_LENGTH", default=2_000, ge=100, le=10_000),
+    ]
+    static_review_max_suggestion_length: Annotated[
+        int,
+        Field(validation_alias="STATIC_REVIEW_MAX_SUGGESTION_LENGTH", default=2_000, ge=100, le=10_000),
+    ]
+    static_review_validation_confidence_threshold: Annotated[
+        float,
+        Field(validation_alias="STATIC_REVIEW_VALIDATION_CONFIDENCE_THRESHOLD", default=0.8, ge=0, le=1),
+    ]
     gemini_api_key: Annotated[str, Field(validation_alias="GEMINI_API_KEY", default="")]
 
     @property
     def cors_origins(self) -> list[str]:
         return [self.frontend_url]
+
+    @model_validator(mode="after")
+    def validate_static_review_limits(self) -> "Settings":
+        if self.static_review_max_total_bytes < self.static_review_max_file_bytes:
+            raise ValueError("STATIC_REVIEW_MAX_TOTAL_BYTES must be at least STATIC_REVIEW_MAX_FILE_BYTES")
+        return self
 
 
 @lru_cache

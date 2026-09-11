@@ -74,3 +74,25 @@ class GitHubPullRequest(GitHubData):
         if self.merged_at is not None:
             return PullRequestStatus.MERGED
         return PullRequestStatus.CLOSED if self.state == "closed" else PullRequestStatus.OPEN
+
+
+class GitHubPullRequestFile(BaseModel):
+    model_config = ConfigDict(extra="ignore", hide_input_in_errors=True)
+
+    filename: str = Field(min_length=1, max_length=1024)
+    status: Literal["added", "removed", "modified", "renamed", "copied", "changed", "unchanged"]
+    additions: Counter
+    deletions: Counter
+    changes: Counter
+    patch: str | None = None
+    previous_filename: str | None = Field(default=None, max_length=1024)
+    head_sha: str | None = Field(default=None, pattern=r"^[0-9a-fA-F]{40}$")
+
+
+class GitHubContentFile(BaseModel):
+    model_config = ConfigDict(extra="ignore", hide_input_in_errors=True)
+
+    type: Literal["file"]
+    encoding: Literal["base64"]
+    size: Counter
+    content: str

@@ -1,8 +1,11 @@
 import asyncio
+import base64
+import binascii
 import math
 import re
 from datetime import UTC, datetime
 from email.utils import parsedate_to_datetime
+from urllib.parse import quote
 from urllib.parse import parse_qs, urlsplit
 
 import httpx
@@ -10,7 +13,7 @@ from pydantic import TypeAdapter, ValidationError
 
 from app.core.config import Settings
 from app.clients.errors import GitHubError, GitHubRateLimitError
-from app.schemas.github import GitHubPullRequest, GitHubRepository, PullRequestReference, RepositoryTarget
+from app.schemas.github import GitHubContentFile, GitHubPullRequest, GitHubPullRequestFile, GitHubRepository, PullRequestReference, RepositoryTarget
 
 
 def usable_token(value: str) -> str | None:
@@ -149,3 +152,50 @@ class GitHubClient:
             except (ValueError, KeyError):
                 raise GitHubError("GitHub returned invalid pagination.") from None
             page = next_page
+
+    async def pull_request_files(self, target: RepositoryTarget, number: int, head_sha: str) -> list[GitHubPullRequestFile]:
+        path = f"/repos/{target.owner}/{target.repo}/pulls/{number}/files"
+        page = 1
+        items: list[GitHubPullRequestFile] = []
+        while True:
+            response = await self._get(path, {"per_page": 100, "page": page})
+            try:
+                raw_files = TypeAdapter(list[GitHubPullRequestFile]).validate_json(response.content)
+            except ValidationError:
+                raise GitHubError("GitHub returned invalid pull request file metadata.") from None
+            items.extend(item.model_copy(update={"head_sha": head_sha}) for item in raw_files)
+            next_url = response.links.get("next", {}).get("url")
+            if not next_url:
+                return items
+            page = self._next_page(next_url, path, page)
+
+    async def file_content(self, target: RepositoryTarget, path: str, ref: str, max_bytes: int) -> bytes:
+        encoded_path = quote(path, safe="/")
+        response = await self._get(f"/repos/{target.owner}/{target.repo}/contents/{encoded_path}", {"ref": ref})
+        try:
+            metadata = GitHubContentFile.model_validate_json(response.content)
+        except ValidationError:
+            raise GitHubError("GitHub returned unsupported file content metadata.") from None
+        if metadata.size > max_bytes:
+            raise GitHubError("GitHub file content exceeds the configured size limit.")
+        try:
+            content = base64.b64decode("".join(metadata.content.split()), validate=True)
+        except (binascii.Error, ValueError):
+            raise GitHubError("GitHub returned invalid file content encoding.") from None
+        if len(content) != metadata.size or len(content) > max_bytes:
+            raise GitHubError("GitHub file content exceeds the configured size limit.")
+        return content
+
+    @staticmethod
+    def _next_page(next_url: str, expected_path: str, current_page: int) -> int:
+        try:
+            url = urlsplit(next_url)
+            query = parse_qs(url.query, strict_parsing=True)
+            next_page = int(query["page"][0])
+            if url.scheme != "https" or url.netloc != "api.github.com" or url.path != expected_path or url.fragment or next_page != current_page + 1:
+                raise ValueError("Invalid pagination")
+            if len(query["page"]) != 1:
+                raise ValueError("Invalid pagination")
+            return next_page
+        except (ValueError, KeyError):
+            raise GitHubError("GitHub returned invalid pagination.") from None

@@ -64,4 +64,12 @@ Errors use FastAPI's `detail` envelope: 404 for unknown records, 422 for invalid
 
 All review and finding HTTP routes are read-only in this phase. Do not create fake rows for demos; the first real review records will be produced by a later authenticated orchestration path.
 
+Static-analysis reviews can be created only by the local administrative CLI:
+
+```powershell
+python -m app.cli.review_pull_request --repository jeyapragash1/ai-code-review-assistant --pr-number 1
+```
+
+The CLI does not publish GitHub comments or run Gemini. Once it completes, these read APIs expose the persisted review and finding rows without special-casing PR numbers or fixture files.
+
 Swagger: http://127.0.0.1:8000/docs. OpenAPI: http://127.0.0.1:8000/openapi.json.
