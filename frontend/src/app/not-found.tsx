@@ -9,8 +9,8 @@ export default function NotFound() {
         This record is not in the workspace
       </h1>
       <p className="muted">
-        The link may be incorrect, or the record is not available. Review
-        records are not implemented yet.
+        The link may be incorrect, or the record is not available in the
+        synchronized workspace.
       </p>
       <Link href="/dashboard" className="button primary">
         Back to dashboard

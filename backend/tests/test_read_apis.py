@@ -19,8 +19,10 @@ from app.models import (
     PullRequest,
     PullRequestStatus,
     Repository,
+    Review,
     ReviewRisk,
     ReviewStatus,
+    ReviewTriggerType,
 )
 from app.repositories.pull_request import PullRequestStore
 from app.repositories.repository import RepositoryStore
@@ -257,7 +259,7 @@ def test_dashboard_uses_counts_and_honest_zeros():
     connected, counts, reviews, findings, total, rows = Mock(), Mock(), Mock(), Mock(), Mock(), Mock()
     connected.scalar_one.return_value = 1
     counts.one.return_value = (3, 1, 1, 1)
-    reviews.scalar_one.return_value = 2
+    reviews.one.return_value = (2, 1, 1, 0)
     findings.one.return_value = (5, 2)
     total.scalar_one.return_value = 3
     rows.all.return_value = []
@@ -271,6 +273,9 @@ def test_dashboard_uses_counts_and_honest_zeros():
     assert response.json() == {
         "connected_repository_count": 1, "total_pull_request_count": 3,
         "open_pr_count": 1, "closed_pr_count": 1, "merged_pr_count": 1,
+        "total_reviews": 2, "completed_reviews": 1,
+        "failed_reviews": 1, "in_progress_reviews": 0,
+        "total_findings": 5, "high_severity_findings": 2,
         "reviews_count": 2, "findings_count": 5, "high_severity_findings_count": 2,
         "recently_updated_pull_requests": [],
     }
@@ -344,6 +349,59 @@ def test_review_queries_apply_filters_order_and_bounded_pagination(kind):
     else:
         assert "review_findings.severity =" in sql and "review_findings.file_path" in sql
         assert "a/%b/_" in compiled.params.values()
+
+
+def test_review_list_includes_related_pull_request_summary():
+    now = datetime.now(UTC)
+    repository = Repository(
+        id=uuid4(),
+        github_repository_id=1,
+        owner="octocat",
+        name="example",
+        full_name="octocat/example",
+        created_at=now,
+        updated_at=now,
+    )
+    pull_request = PullRequest(
+        id=uuid4(),
+        repository_id=repository.id,
+        github_pr_number=7,
+        title="A real review",
+        author_login="octocat",
+        base_branch="main",
+        head_branch="feature",
+        status=PullRequestStatus.OPEN,
+        head_sha="a" * 40,
+        created_at=now,
+        updated_at=now,
+    )
+    review = Review(
+        id=uuid4(),
+        pull_request_id=pull_request.id,
+        commit_sha="a" * 40,
+        attempt_number=1,
+        status=ReviewStatus.COMPLETED,
+        overall_risk=ReviewRisk.HIGH,
+        trigger_type=ReviewTriggerType.MANUAL,
+        started_at=now,
+        completed_at=now,
+        created_at=now,
+        updated_at=now,
+    )
+    session = AsyncMock()
+    count, rows = Mock(), Mock()
+    count.scalar_one.return_value = 1
+    rows.all.return_value = [(review, pull_request, repository, 3, 1)]
+    session.execute.side_effect = [count, rows]
+
+    page = asyncio.run(ReviewStore(session).list(PageParams()))
+
+    item = page.items[0]
+    assert item.repository_id == repository.id
+    assert item.repository_full_name == "octocat/example"
+    assert item.pull_request_number == 7
+    assert item.pull_request_title == "A real review"
+    assert item.pull_request_status == PullRequestStatus.OPEN
 
 
 def test_finding_create_uses_review_fingerprint_unique_key():

@@ -38,18 +38,41 @@ class ReviewStore:
         ).group_by(ReviewFinding.review_id).subquery()
 
     @classmethod
-    def _statement(cls) -> Select[tuple[Review, int, int]]:
+    def _statement(cls) -> Select[tuple[Review, PullRequest, Repository, int, int]]:
         counts = cls._counts_subquery()
         return select(
             Review,
+            PullRequest,
+            Repository,
             func.coalesce(counts.c.findings_count, 0),
             func.coalesce(counts.c.high_count, 0),
+        ).join(PullRequest, Review.pull_request_id == PullRequest.id).join(
+            Repository, PullRequest.repository_id == Repository.id
         ).outerjoin(counts, Review.id == counts.c.review_id)
 
     @staticmethod
-    def _response(record: Review, findings_count: int, high_count: int) -> ReviewResponse:
+    def _response(
+        record: Review,
+        pull_request: PullRequest | None,
+        repository: Repository | None,
+        findings_count: int,
+        high_count: int,
+    ) -> ReviewResponse:
+        summary = {}
+        if pull_request is not None:
+            summary.update(
+                {
+                    "repository_id": pull_request.repository_id,
+                    "pull_request_number": pull_request.github_pr_number,
+                    "pull_request_title": pull_request.title,
+                    "pull_request_status": pull_request.status,
+                }
+            )
+        if repository is not None:
+            summary["repository_full_name"] = repository.full_name
         return ReviewResponse.model_validate(record).model_copy(
             update={
+                **summary,
                 "findings_count": findings_count,
                 "high_severity_findings_count": high_count,
             }
@@ -150,7 +173,7 @@ class ReviewStore:
         if row is None:
             return None
         review, pull_request, repository, findings_count, high_count = row
-        review_response = self._response(review, findings_count, high_count)
+        review_response = self._response(review, pull_request, repository, findings_count, high_count)
         pull_request_response = PullRequestResponse.model_validate(pull_request).model_copy(
             update={"repository_full_name": repository.full_name}
         )
@@ -170,7 +193,6 @@ class ReviewStore:
         commit_sha: str | None = None,
     ) -> Page[ReviewResponse]:
         filters = []
-        join_pull_requests = repository_id is not None
         if pull_request_id is not None:
             filters.append(Review.pull_request_id == pull_request_id)
         if repository_id is not None:
@@ -184,9 +206,8 @@ class ReviewStore:
 
         count_statement = select(func.count()).select_from(Review)
         statement = self._statement()
-        if join_pull_requests:
+        if repository_id is not None:
             count_statement = count_statement.join(PullRequest, Review.pull_request_id == PullRequest.id)
-            statement = statement.join(PullRequest, Review.pull_request_id == PullRequest.id)
 
         total = (await self.session.execute(count_statement.where(*filters))).scalar_one()
         rows = (await self.session.execute(

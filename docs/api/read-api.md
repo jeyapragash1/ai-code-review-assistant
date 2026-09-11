@@ -58,7 +58,7 @@ Review endpoints:
 
 Review filters: `pull_request_id`, `repository_id`, `status`, `overall_risk`, and `commit_sha`. Finding filters: `severity`, `category`, `status`, `source`, and `file_path`. Review detail responses include the associated Pull Request summary. Finding responses include only safe review metadata and optional safe snippets; they do not expose prompts, secrets, webhook payloads, or provider responses.
 
-Dashboard fields: `connected_repository_count`, `total_pull_request_count`, `open_pr_count`, `closed_pr_count`, `merged_pr_count`, `reviews_count`, `findings_count`, `high_severity_findings_count`, and `recently_updated_pull_requests`. Review and finding counts come from the real review tables. They remain zero until a future review engine creates rows.
+Dashboard fields: `connected_repository_count`, `total_pull_request_count`, `open_pr_count`, `closed_pr_count`, `merged_pr_count`, `total_reviews`, `completed_reviews`, `failed_reviews`, `in_progress_reviews`, `total_findings`, `high_severity_findings`, and `recently_updated_pull_requests`. Legacy aliases (`reviews_count`, `findings_count`, and `high_severity_findings_count`) remain for compatibility. Counts come from real review tables; review attempts are not presented as successful reviews unless their status is `completed`.
 
 Errors use FastAPI's `detail` envelope: 404 for unknown records, 422 for invalid parameters, and a generic 503 for unavailable database data. Webhook payloads, database errors, credentials, and upstream response bodies are never returned. Existing `/health`, `/health/ready`, and signed webhook ingress retain their behavior.
 

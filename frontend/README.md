@@ -37,7 +37,7 @@ No local environment file is needed for this default. A different deployment can
 - `src/types`: response types matching backend Pydantic schemas, including nullable fields and backend pagination.
 - `src/lib/api/client.ts`: native GET fetch, encoded URL construction, five-second timeout, no credentials, no caching, and safe error mapping. No automatic retries or polling.
 - `src/lib/api/parsers.ts`: runtime validation of untrusted JSON into typed response objects.
-- `src/lib/api/{dashboard,repositories,pull-requests}.ts`: endpoint-specific transport functions.
+- `src/lib/api/{dashboard,repositories,pull-requests,reviews}.ts`: endpoint-specific transport functions.
 - `src/lib/api/server.ts`: Server Component data loading and request-scoped dashboard deduplication. Next.js `connection()` defers API access until a request, so production builds do not need FastAPI.
 - `src/app/(dashboard)`: server-rendered pages and a template that refreshes connectivity on navigation. Only a successful dashboard request enables the Live API indicator.
 - `src/components`: reusable responsive shell, real repository/PR lists, filters, pagination, safe error/empty states, refresh button, and theme preferences.
@@ -53,12 +53,12 @@ Search, filters, page size, and page are encoded in URL query parameters. Native
 | `/repositories`       | Paginated search and active-state filtering          |
 | `/repositories/[id]`  | Database UUID, repository metadata and real PR page  |
 | `/pull-requests`      | Paginated search, repository and status filtering    |
-| `/pull-requests/[id]` | Real PR metadata and change counts                   |
-| `/reviews`            | Honest unavailable feature state                     |
-| `/reviews/[id]`       | Not found; no mock review IDs accepted               |
+| `/pull-requests/[id]` | Real PR metadata, change counts, and review history  |
+| `/reviews`            | Paginated persisted review attempts with filters     |
+| `/reviews/[id]`       | Real review details, safe failures, and findings     |
 | `/settings`           | Local theme, API connectivity, real repository count |
 
-The six consumed frontend endpoints are `/dashboard/statistics`, `/repositories`, `/repositories/{id}`, `/repositories/{id}/pull-requests`, `/pull-requests`, and `/pull-requests/{id}`, relative to the API base. Unknown/invalid detail IDs show the not-found page. Review and finding tables may exist in the backend, but the review engine is not connected yet; dashboard counts come from the backend, and no analysis is fabricated. Authentication, AI configuration, notifications, and GitHub App installation are not configured by this UI.
+The frontend consumes the dashboard, repository, Pull Request, review, and finding read endpoints relative to the API base. Unknown/invalid detail IDs show the not-found page. Review attempts and findings are always persisted backend data: there is no mock fallback. The current pipeline provides static-analysis results; Gemini analysis, authentication, notifications, and GitHub App installation are not configured by this UI.
 
 ## Verification
 
@@ -72,7 +72,7 @@ npm run build
 npm run start
 ```
 
-Tests exercise URL construction, pagination, typed response validation, safe transport errors, credential omission, and rejection of mock IDs. They mock fetch and do not require GitHub or FastAPI. Production builds must succeed with FastAPI stopped; runtime pages remain dynamic. The production server defaults to http://localhost:3000.
+Tests exercise URL construction, pagination, typed repository/review/finding validation, safe transport errors, credential omission, and rejection of mock IDs. They mock fetch and do not require GitHub or FastAPI. Production builds must succeed with FastAPI stopped; runtime pages remain dynamic. The production server defaults to http://localhost:3000.
 
 ## Troubleshooting
 

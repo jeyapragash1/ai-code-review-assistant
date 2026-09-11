@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import { FileCode, GitCommitHorizontal } from "lucide-react";
-import { getPullRequest } from "@/lib/api/pull-requests";
+import { getPullRequest, getPullRequestReviews } from "@/lib/api/pull-requests";
 import { load } from "@/lib/api/server";
 import { isUuid } from "@/lib/api/parsers";
 import {
@@ -15,7 +15,8 @@ import {
 import { ApiState } from "@/components/ui/api-state";
 import { GitHubLink } from "@/components/ui/github-link";
 import { RefreshButton } from "@/components/ui/refresh-button";
-import { formatDate, shortSha } from "@/lib/utils";
+import { ReviewList } from "@/components/reviews/review-list";
+import { formatDate, label, shortSha } from "@/lib/utils";
 export default async function Page({
   params,
 }: {
@@ -23,12 +24,22 @@ export default async function Page({
 }) {
   const { id } = await params;
   if (!isUuid(id)) notFound();
-  const result = await load(() => getPullRequest(id));
+  const result = await load(async () => {
+    const pullRequest = await getPullRequest(id);
+    const reviews = await getPullRequestReviews(id, { page: 1, page_size: 100 });
+    return { pullRequest, reviews };
+  });
   if (!result.ok) {
     if (result.error === "not_found") notFound();
     return <ApiState kind={result.error} />;
   }
-  const p = result.data;
+  const { pullRequest: p, reviews } = result.data;
+  const completed = reviews.items.filter((review) => review.status === "completed");
+  const failed = reviews.items.filter((review) => review.status === "failed");
+  const inProgress = reviews.items.filter(
+    (review) => !["completed", "failed"].includes(review.status),
+  );
+  const latestCompleted = completed[0];
   return (
     <div className="page-stack">
       <Breadcrumbs
@@ -109,10 +120,49 @@ export default async function Page({
         />
       </div>
       <Card>
-        <EmptyState
-          title="AI review results are not available yet."
-          description="AI review results will appear after the review engine processes this Pull Request."
-        />
+        <div className="panel-head">
+          <h2>Review history</h2>
+          <span className="muted text-xs">Static analysis</span>
+        </div>
+        {reviews.total === 0 ? (
+          <EmptyState
+            title="No review attempts exist for this Pull Request yet."
+            description="The protected review CLI creates static-analysis attempts. AI analysis is not enabled yet."
+          />
+        ) : (
+          <>
+            <dl className="grid gap-3 border-b border-[var(--border)] p-5 sm:grid-cols-4">
+              {[
+                { label: "Attempts", value: reviews.total },
+                { label: "Completed", value: completed.length },
+                { label: "Failed", value: failed.length },
+                { label: "In progress", value: inProgress.length },
+              ].map((item) => (
+                <div key={item.label}>
+                  <dt className="muted text-xs">{item.label}</dt>
+                  <dd className="mt-1 font-semibold tabular-nums">{item.value}</dd>
+                </div>
+              ))}
+            </dl>
+            {latestCompleted && (
+              <div className="border-b border-[var(--border)] p-5">
+                <p className="muted text-xs">Latest completed review</p>
+                <div className="mt-2 flex flex-wrap items-center gap-3">
+                  <Badge tone={latestCompleted.overall_risk ?? "none"}>
+                    Risk: {label(latestCompleted.overall_risk ?? "none")}
+                  </Badge>
+                  <span className="text-sm">
+                    {latestCompleted.findings_count} persisted findings
+                  </span>
+                  <a className="button" href={`/reviews/${latestCompleted.id}`}>
+                    View review
+                  </a>
+                </div>
+              </div>
+            )}
+            <ReviewList items={reviews.items} />
+          </>
+        )}
       </Card>
     </div>
   );

@@ -137,7 +137,13 @@ a {
 }
 .badge.medium,
 .badge.processing,
-.badge.pending {
+.badge.pending,
+.badge.queued,
+.badge.fetching,
+.badge.static_analysis,
+.badge.ai_analysis,
+.badge.validating,
+.badge.publishing {
   background: var(--amber-soft);
   color: var(--amber);
 }
@@ -148,7 +154,8 @@ a {
 }
 .badge.clear,
 .badge.completed,
-.badge.active {
+.badge.active,
+.badge.none {
   background: var(--green-soft);
   color: var(--green);
 }

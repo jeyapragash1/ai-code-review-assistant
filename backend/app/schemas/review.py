@@ -10,6 +10,7 @@ from app.models.enums import (
     FindingSeverity,
     FindingSource,
     FindingStatus,
+    PullRequestStatus,
     ReviewRisk,
     ReviewStatus,
     ReviewTriggerType,
@@ -59,6 +60,11 @@ class ReviewResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: UUID
     pull_request_id: UUID
+    repository_id: UUID | None = None
+    repository_full_name: str | None = None
+    pull_request_number: int | None = None
+    pull_request_title: str | None = None
+    pull_request_status: PullRequestStatus | None = None
     commit_sha: str
     attempt_number: int
     status: ReviewStatus

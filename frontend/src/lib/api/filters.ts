@@ -3,6 +3,14 @@ import type { Query } from "./client.ts";
 import { ApiError } from "./errors.ts";
 import { isUuid } from "./parsers.ts";
 import type { PullRequestStatus } from "../../types/pull-request.ts";
+import type {
+  FindingCategory,
+  FindingSeverity,
+  FindingSource,
+  FindingStatus,
+  ReviewRisk,
+  ReviewStatus,
+} from "../../types/review.ts";
 export function one(params: SearchParams, key: string): string | undefined {
   const value = params[key];
   if (Array.isArray(value)) throw new ApiError("validation");
@@ -50,6 +58,109 @@ export function repositoryQuery(params: SearchParams): string | undefined {
   const id = one(params, "repository_id");
   if (id && !isUuid(id)) throw new ApiError("validation");
   return id;
+}
+export function pullRequestQuery(params: SearchParams): string | undefined {
+  const id = one(params, "pull_request_id");
+  if (id && !isUuid(id)) throw new ApiError("validation");
+  return id;
+}
+export function reviewStatusQuery(
+  params: SearchParams,
+): ReviewStatus | undefined {
+  const status = one(params, "status");
+  if (
+    status === undefined ||
+    status === "queued" ||
+    status === "fetching" ||
+    status === "static_analysis" ||
+    status === "ai_analysis" ||
+    status === "validating" ||
+    status === "publishing" ||
+    status === "completed" ||
+    status === "failed"
+  )
+    return status;
+  throw new ApiError("validation");
+}
+export function reviewRiskQuery(params: SearchParams): ReviewRisk | undefined {
+  const risk = one(params, "overall_risk");
+  if (
+    risk === undefined ||
+    risk === "none" ||
+    risk === "low" ||
+    risk === "medium" ||
+    risk === "high"
+  )
+    return risk;
+  throw new ApiError("validation");
+}
+export function commitShaQuery(params: SearchParams): string | undefined {
+  const sha = one(params, "commit_sha");
+  if (sha && !/^[0-9a-f]{7,40}$/i.test(sha)) throw new ApiError("validation");
+  return sha;
+}
+export function findingSeverityQuery(
+  params: SearchParams,
+): FindingSeverity | undefined {
+  const severity = one(params, "severity");
+  if (
+    severity === undefined ||
+    severity === "high" ||
+    severity === "medium" ||
+    severity === "low"
+  )
+    return severity;
+  throw new ApiError("validation");
+}
+export function findingCategoryQuery(
+  params: SearchParams,
+): FindingCategory | undefined {
+  const category = one(params, "category");
+  if (
+    category === undefined ||
+    category === "security" ||
+    category === "bug" ||
+    category === "validation" ||
+    category === "error_handling" ||
+    category === "performance" ||
+    category === "database" ||
+    category === "maintainability" ||
+    category === "code_quality" ||
+    category === "best_practice"
+  )
+    return category;
+  throw new ApiError("validation");
+}
+export function findingStatusQuery(
+  params: SearchParams,
+): FindingStatus | undefined {
+  const status = one(params, "status");
+  if (
+    status === undefined ||
+    status === "open" ||
+    status === "dismissed" ||
+    status === "resolved"
+  )
+    return status;
+  throw new ApiError("validation");
+}
+export function findingSourceQuery(
+  params: SearchParams,
+): FindingSource | undefined {
+  const source = one(params, "source");
+  if (
+    source === undefined ||
+    source === "static" ||
+    source === "ai" ||
+    source === "hybrid"
+  )
+    return source;
+  throw new ApiError("validation");
+}
+export function filePathQuery(params: SearchParams): string | undefined {
+  const filePath = one(params, "file_path");
+  if (filePath && filePath.length > 1024) throw new ApiError("validation");
+  return filePath;
 }
 export function pageHref(path: string, query: Query, page: number): string {
   const url = new URL(path, "http://local.invalid");

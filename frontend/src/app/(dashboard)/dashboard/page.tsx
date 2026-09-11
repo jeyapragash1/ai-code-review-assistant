@@ -65,21 +65,21 @@ export default async function Page() {
           icon={<GitMerge size={17} />}
         />
         <StatCard
-          label="Reviews"
-          value={d.reviews_count}
-          detail="Review engine not connected"
+          label="Review attempts"
+          value={d.total_reviews}
+          detail="Automated static analysis"
           icon={<ShieldCheck size={17} />}
         />
         <StatCard
-          label="Findings"
-          value={d.findings_count}
-          detail="No review findings available"
+          label="Completed"
+          value={d.completed_reviews}
+          detail="Finished review attempts"
           icon={<CircleAlert size={17} />}
         />
         <StatCard
-          label="High-severity findings"
-          value={d.high_severity_findings_count}
-          detail="No review findings available"
+          label="Failed"
+          value={d.failed_reviews}
+          detail="Safe failure details available"
           icon={<CircleAlert size={17} />}
         />
       </div>
@@ -132,12 +132,38 @@ export default async function Page() {
         </Card>
         <Card>
           <div className="panel-head">
-            <h2>AI reviews</h2>
+            <h2>Static review results</h2>
+            <Link
+              className="accent text-xs"
+              href="/reviews"
+              prefetch={false}
+            >
+              All review attempts
+            </Link>
           </div>
-          <EmptyState
-            title="No AI reviews are available yet."
-            description="The review engine has not been connected."
-          />
+          {d.total_reviews === 0 ? (
+            <EmptyState
+              title="No static review attempts yet"
+              description="Run the protected review CLI for a synchronized Pull Request to create results."
+            />
+          ) : (
+            <dl className="grid gap-4 p-5 sm:grid-cols-2">
+              {[
+                { name: "In progress", count: d.in_progress_reviews },
+                { name: "Findings", count: d.total_findings },
+                {
+                  name: "High-severity findings",
+                  count: d.high_severity_findings,
+                },
+                { name: "AI analysis", count: "Not enabled" },
+              ].map((item) => (
+                <div key={item.name} className="bordered rounded-md p-3">
+                  <dt className="muted text-xs">{item.name}</dt>
+                  <dd className="mt-1 font-semibold">{item.count}</dd>
+                </div>
+              ))}
+            </dl>
+          )}
         </Card>
       </div>
     </div>

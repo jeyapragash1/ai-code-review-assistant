@@ -6,6 +6,19 @@ import type {
   PullRequestStatus,
 } from "../../types/pull-request.ts";
 import type { DashboardStatistics } from "../../types/dashboard.ts";
+import type {
+  FindingCategory,
+  FindingDiffSide,
+  FindingSeverity,
+  FindingSource,
+  FindingStatus,
+  Review,
+  ReviewDetail,
+  ReviewFinding,
+  ReviewRisk,
+  ReviewStatus,
+  ReviewTriggerType,
+} from "../../types/review.ts";
 import { ApiError } from "./errors.ts";
 
 function fail(): never {
@@ -27,6 +40,13 @@ function num(v: unknown): number {
 }
 function bool(v: unknown): boolean {
   return typeof v === "boolean" ? v : fail();
+}
+function decimalString(v: unknown): string {
+  if (typeof v === "string" && /^(?:0|[1-9]\d*)(?:\.\d+)?$/.test(v))
+    return v;
+  if (typeof v === "number" && Number.isFinite(v) && v >= 0)
+    return String(v);
+  return fail();
 }
 function nullable<T>(v: unknown, parse: (v: unknown) => T): T | null {
   return v === null ? null : parse(v);
@@ -51,6 +71,55 @@ function array<T>(v: unknown, parse: (v: unknown) => T): T[] {
 }
 export function parseStatus(v: unknown): PullRequestStatus {
   return v === "open" || v === "closed" || v === "merged" ? v : fail();
+}
+export function parseReviewStatus(v: unknown): ReviewStatus {
+  return v === "queued" ||
+    v === "fetching" ||
+    v === "static_analysis" ||
+    v === "ai_analysis" ||
+    v === "validating" ||
+    v === "publishing" ||
+    v === "completed" ||
+    v === "failed"
+    ? v
+    : fail();
+}
+export function parseReviewRisk(v: unknown): ReviewRisk {
+  return v === "none" || v === "low" || v === "medium" || v === "high"
+    ? v
+    : fail();
+}
+export function parseReviewTrigger(v: unknown): ReviewTriggerType {
+  return v === "manual" || v === "webhook" || v === "synchronization"
+    ? v
+    : fail();
+}
+export function parseFindingSeverity(v: unknown): FindingSeverity {
+  return v === "high" || v === "medium" || v === "low" ? v : fail();
+}
+export function parseFindingCategory(v: unknown): FindingCategory {
+  return v === "security" ||
+    v === "bug" ||
+    v === "validation" ||
+    v === "error_handling" ||
+    v === "performance" ||
+    v === "database" ||
+    v === "maintainability" ||
+    v === "code_quality" ||
+    v === "best_practice"
+    ? v
+    : fail();
+}
+export function parseFindingSource(v: unknown): FindingSource {
+  return v === "static" || v === "ai" || v === "hybrid" ? v : fail();
+}
+export function parseFindingStatus(v: unknown): FindingStatus {
+  return v === "open" || v === "dismissed" || v === "resolved"
+    ? v
+    : fail();
+}
+function parseDiffSide(v: unknown): FindingDiffSide {
+  return v === "left" || v === "right" ? v : fail();
 }
 function summary(v: unknown): RepositorySummary {
   const o = record(v);
@@ -109,6 +178,74 @@ export function parsePullRequestDetail(v: unknown): PullRequestDetail {
   const o = record(v);
   return { ...parsePullRequest(o), repository: summary(o.repository) };
 }
+export function parseReview(v: unknown): Review {
+  const o = record(v);
+  return {
+    id: uuid(o.id),
+    pull_request_id: uuid(o.pull_request_id),
+    repository_id: nullable(o.repository_id, uuid),
+    repository_full_name: nullable(o.repository_full_name, str),
+    pull_request_number: nullable(o.pull_request_number, num),
+    pull_request_title: nullable(o.pull_request_title, str),
+    pull_request_status: nullable(o.pull_request_status, parseStatus),
+    commit_sha: str(o.commit_sha),
+    attempt_number: num(o.attempt_number),
+    status: parseReviewStatus(o.status),
+    overall_risk: nullable(o.overall_risk, parseReviewRisk),
+    trigger_type: parseReviewTrigger(o.trigger_type),
+    model_name: nullable(o.model_name, str),
+    model_version: nullable(o.model_version, str),
+    prompt_version: nullable(o.prompt_version, str),
+    duration_ms: nullable(o.duration_ms, num),
+    static_analysis_duration_ms: nullable(o.static_analysis_duration_ms, num),
+    ai_analysis_duration_ms: nullable(o.ai_analysis_duration_ms, num),
+    input_tokens: nullable(o.input_tokens, num),
+    output_tokens: nullable(o.output_tokens, num),
+    total_tokens: nullable(o.total_tokens, num),
+    estimated_cost_usd: nullable(o.estimated_cost_usd, decimalString),
+    error_code: nullable(o.error_code, str),
+    error_message: nullable(o.error_message, str),
+    started_at: date(o.started_at),
+    completed_at: nullable(o.completed_at, date),
+    findings_count: num(o.findings_count),
+    high_severity_findings_count: num(o.high_severity_findings_count),
+    created_at: date(o.created_at),
+    updated_at: date(o.updated_at),
+  };
+}
+export function parseReviewDetail(v: unknown): ReviewDetail {
+  const o = record(v);
+  return { ...parseReview(o), pull_request: parsePullRequestDetail(o.pull_request) };
+}
+export function parseReviewFinding(v: unknown): ReviewFinding {
+  const o = record(v);
+  const confidence = decimalString(o.confidence);
+  const value = Number(confidence);
+  if (!Number.isFinite(value) || value < 0 || value > 1) fail();
+  return {
+    id: uuid(o.id),
+    review_id: uuid(o.review_id),
+    file_path: str(o.file_path),
+    start_line: nullable(o.start_line, num),
+    end_line: nullable(o.end_line, num),
+    diff_side: nullable(o.diff_side, parseDiffSide),
+    severity: parseFindingSeverity(o.severity),
+    category: parseFindingCategory(o.category),
+    title: str(o.title),
+    problem: str(o.problem),
+    explanation: nullable(o.explanation, str),
+    suggestion: nullable(o.suggestion, str),
+    confidence,
+    source: parseFindingSource(o.source),
+    fingerprint: str(o.fingerprint),
+    code_snippet: nullable(o.code_snippet, str),
+    status: parseFindingStatus(o.status),
+    github_comment_id: nullable(o.github_comment_id, num),
+    published_to_github: bool(o.published_to_github),
+    created_at: date(o.created_at),
+    updated_at: date(o.updated_at),
+  };
+}
 export function parsePage<T>(v: unknown, parse: (v: unknown) => T): Page<T> {
   const o = record(v);
   const result = {
@@ -136,6 +273,12 @@ export function parseDashboard(v: unknown): DashboardStatistics {
     open_pr_count: num(o.open_pr_count),
     closed_pr_count: num(o.closed_pr_count),
     merged_pr_count: num(o.merged_pr_count),
+    total_reviews: num(o.total_reviews),
+    completed_reviews: num(o.completed_reviews),
+    failed_reviews: num(o.failed_reviews),
+    in_progress_reviews: num(o.in_progress_reviews),
+    total_findings: num(o.total_findings),
+    high_severity_findings: num(o.high_severity_findings),
     reviews_count: num(o.reviews_count),
     findings_count: num(o.findings_count),
     high_severity_findings_count: num(o.high_severity_findings_count),

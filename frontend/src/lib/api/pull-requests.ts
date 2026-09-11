@@ -7,6 +7,7 @@ import {
   parsePage,
   parsePullRequest,
   parsePullRequestDetail,
+  parseReview,
 } from "./parsers.ts";
 export interface PullRequestQuery extends PaginationQuery {
   search?: string;
@@ -18,4 +19,15 @@ export const getPullRequests = (query: PullRequestQuery = {}) =>
 export function getPullRequest(id: string) {
   if (!isUuid(id)) throw new ApiError("not_found");
   return get(["pull-requests", id], parsePullRequestDetail);
+}
+export function getPullRequestReviews(
+  id: string,
+  query: PaginationQuery = {},
+) {
+  if (!isUuid(id)) throw new ApiError("not_found");
+  return get(
+    ["pull-requests", id, "reviews"],
+    (v) => parsePage(v, parseReview),
+    { ...query },
+  );
 }
