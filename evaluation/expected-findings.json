@@ -1,0 +1,35 @@
+{
+  "fixture": "fixtures/python/insecure_user_lookup.py",
+  "findings": [
+    {
+      "test_case_id": "PY-INSECURE-USER-LOOKUP-001",
+      "file_path": "evaluation/fixtures/python/insecure_user_lookup.py",
+      "category": "SECURITY",
+      "expected_severity": "HIGH",
+      "title": "SQL query uses user-controlled input with string formatting",
+      "evidence": "The lookup query interpolates user_id directly into the SQL text.",
+      "explanation": "Building SQL with unvalidated user-controlled values can allow SQL injection and may let an attacker read or alter data outside the intended lookup.",
+      "expected_recommendation": "Validate the identifier and use a parameterized query so the database driver treats user_id as data rather than SQL."
+    },
+    {
+      "test_case_id": "PY-INSECURE-USER-LOOKUP-002",
+      "file_path": "evaluation/fixtures/python/insecure_user_lookup.py",
+      "category": "VALIDATION",
+      "expected_severity": "MEDIUM",
+      "title": "User ID is not validated before use",
+      "evidence": "The function accepts user_id and uses it without checking type, format, range, or presence.",
+      "explanation": "Missing validation makes downstream behavior unpredictable and increases the likelihood that invalid or hostile input reaches sensitive code paths.",
+      "expected_recommendation": "Validate user_id at the boundary, reject invalid values early, and pass only normalized values to the query layer."
+    },
+    {
+      "test_case_id": "PY-INSECURE-USER-LOOKUP-003",
+      "file_path": "evaluation/fixtures/python/insecure_user_lookup.py",
+      "category": "ERROR_HANDLING",
+      "expected_severity": "MEDIUM",
+      "title": "Broad exception handler hides lookup failures",
+      "evidence": "The function catches Exception and returns None for every failure.",
+      "explanation": "Catching all exceptions without preserving or reporting the failure obscures operational issues and can make security-relevant failures look like normal missing data.",
+      "expected_recommendation": "Catch only expected database errors, handle them explicitly, and report failures through a safe error path without exposing sensitive details."
+    }
+  ]
+}
