@@ -17,6 +17,7 @@ from app.models.review_finding import ReviewFinding
 from app.models.webhook_event import WebhookEvent
 from app.models.user import User, UserSession
 from app.models.github_oauth_transaction import GitHubOAuthTransaction
+from app.models.github_installation import GitHubInstallation, InstallationRepositoryAccess
 
 __all__ = [
     "FindingCategory",
@@ -37,4 +38,6 @@ __all__ = [
     "User",
     "UserSession",
     "GitHubOAuthTransaction",
+    "GitHubInstallation",
+    "InstallationRepositoryAccess",
 ]

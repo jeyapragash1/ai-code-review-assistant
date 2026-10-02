@@ -41,6 +41,9 @@ class Settings(BaseSettings):
     github_token: Annotated[str, Field(validation_alias="GITHUB_TOKEN", default="")]
     github_app_client_id: Annotated[str, Field(validation_alias="GITHUB_APP_CLIENT_ID", default="")]
     github_app_client_secret: Annotated[SecretStr, Field(validation_alias="GITHUB_APP_CLIENT_SECRET", default=SecretStr(""))]
+    github_app_id: Annotated[str, Field(validation_alias="GITHUB_APP_ID", default="")]
+    github_app_private_key_path: Annotated[str, Field(validation_alias="GITHUB_APP_PRIVATE_KEY_PATH", default="")]
+    github_installation_token_refresh_skew_seconds: Annotated[int, Field(validation_alias="GITHUB_INSTALLATION_TOKEN_REFRESH_SKEW_SECONDS", default=60, ge=30, le=600)]
     github_oauth_callback_url: str = Field(default="http://localhost:8000/api/v1/auth/github/callback")
     auth_allowed_github_logins: str = Field(default="jeyapragash1")
     auth_session_cookie_name: str = Field(default="codereview_session", pattern=r"^[A-Za-z0-9_-]{1,128}$")
@@ -120,6 +123,10 @@ class Settings(BaseSettings):
     def github_oauth_configured(self) -> bool:
         return bool(self.github_app_client_id.strip() and self.github_app_client_secret.get_secret_value().strip())
 
+    @property
+    def github_app_configured(self) -> bool:
+        return bool(self.github_app_id.strip() and self.github_app_private_key_path.strip())
+
     @field_validator("github_oauth_callback_url")
     @classmethod
     def validate_callback_url(cls, value: str) -> str:
@@ -128,6 +135,18 @@ class Settings(BaseSettings):
         if parsed.scheme not in {"http", "https"} or not parsed.netloc or parsed.query or parsed.fragment:
             raise ValueError("GITHUB_OAUTH_CALLBACK_URL must be an absolute origin path.")
         return value
+
+    @field_validator("github_app_private_key_path")
+    @classmethod
+    def validate_private_key_path(cls, value: str) -> str:
+        if not value:
+            return value
+        from pathlib import Path
+
+        path = Path(value)
+        if not path.is_absolute() or not path.is_file():
+            raise ValueError("GITHUB_APP_PRIVATE_KEY_PATH must be an absolute path to a private key file.")
+        return str(path)
 
     @model_validator(mode="after")
     def validate_static_review_limits(self) -> "Settings":

@@ -38,7 +38,14 @@ class GitHubRepository(GitHubData):
     description: str | None = None
     primary_language: str | None = Field(default=None, validation_alias="language", max_length=100)
     is_private: bool = Field(validation_alias="private", strict=True)
+    is_fork: bool = Field(validation_alias="fork", default=False, strict=True)
+    is_archived: bool = Field(validation_alias="archived", default=False, strict=True)
+    is_disabled: bool = Field(validation_alias="disabled", default=False, strict=True)
+    stargazer_count: Counter = Field(validation_alias="stargazers_count", default=0)
+    fork_count: Counter = Field(validation_alias="forks_count", default=0)
+    open_issue_count: Counter = Field(validation_alias="open_issues_count", default=0)
     github_updated_at: AwareDatetime = Field(validation_alias="updated_at")
+    github_pushed_at: AwareDatetime | None = Field(default=None, validation_alias="pushed_at")
 
     @model_validator(mode="after")
     def consistent_identity(self) -> "GitHubRepository":

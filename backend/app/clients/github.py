@@ -26,13 +26,13 @@ def usable_token(value: str) -> str | None:
 
 
 class GitHubClient:
-    def __init__(self, settings: Settings, *, transport: httpx.AsyncBaseTransport | None = None) -> None:
+    def __init__(self, settings: Settings, *, transport: httpx.AsyncBaseTransport | None = None, access_token: str | None = None) -> None:
         headers = {
             "Accept": "application/vnd.github+json",
             "X-GitHub-Api-Version": settings.github_api_version,
             "User-Agent": "ai-code-review-assistant/0.1.0",
         }
-        token = usable_token(settings.github_token)
+        token = usable_token(access_token) if access_token is not None else usable_token(settings.github_token)
         if token:
             headers["Authorization"] = f"Bearer {token}"
         self._client = httpx.AsyncClient(

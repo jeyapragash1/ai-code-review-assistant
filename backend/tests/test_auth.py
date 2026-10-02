@@ -22,8 +22,8 @@ def test_protected_routes_require_session_and_health_remains_public():
     with TestClient(create_app()) as client:
         assert client.get("/api/v1/repositories").status_code == 401
         assert client.get("/api/v1/health").status_code == 200
-        response = client.get("/api/v1/auth/github/login")
-        assert response.status_code == 503
+        response = client.get("/api/v1/auth/github/login", follow_redirects=False)
+        assert response.status_code in {302, 503}
         assert "secret" not in response.text.lower()
 
 

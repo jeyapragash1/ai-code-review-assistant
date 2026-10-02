@@ -30,6 +30,13 @@ class Repository(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     primary_language: Mapped[str | None] = mapped_column(String(100))
     is_private: Mapped[bool | None] = mapped_column(Boolean)
     github_updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    github_pushed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    is_fork: Mapped[bool | None] = mapped_column(Boolean)
+    is_archived: Mapped[bool | None] = mapped_column(Boolean)
+    is_disabled: Mapped[bool | None] = mapped_column(Boolean)
+    stargazer_count: Mapped[int | None] = mapped_column(BigInteger)
+    fork_count: Mapped[int | None] = mapped_column(BigInteger)
+    open_issue_count: Mapped[int | None] = mapped_column(BigInteger)
     last_synced_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     default_branch: Mapped[str] = mapped_column(
         String(255),

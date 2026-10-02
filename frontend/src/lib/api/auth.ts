@@ -14,7 +14,8 @@ export function parseAuthenticatedUser(value: unknown): AuthenticatedUser {
 export const getCurrentUser = (cookie?: string) => get(["auth", "me"], parseAuthenticatedUser, {}, cookie);
 export function loginUrl(nextPath = "/dashboard") {
   if (!nextPath.startsWith("/") || nextPath.startsWith("//") || nextPath.includes("\\") || nextPath.includes("%")) throw new ApiError("validation");
-  const url = new URL("auth/github/login", process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000/api/v1/");
+  const api = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000/api/v1";
+  const url = new URL("auth/github/login", api.endsWith("/") ? api : `${api}/`);
   url.searchParams.set("next", nextPath);
   return url.href;
 }
