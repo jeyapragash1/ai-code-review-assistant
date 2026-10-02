@@ -40,7 +40,9 @@ def test_installation_token_is_cached_until_refresh_skew(tmp_path):
         async with GitHubAppClient(settings, transport=httpx.MockTransport(handler)) as client:
             first = await client.installation_token(42)
             second = await client.installation_token(42)
+            third = await client.installation_token(43)
             assert first.value == second.value
+            assert third.value == first.value
 
     asyncio.run(run())
-    assert calls == ["/app/installations/42/access_tokens"]
+    assert calls == ["/app/installations/42/access_tokens", "/app/installations/43/access_tokens"]

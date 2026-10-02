@@ -39,6 +39,9 @@ class Settings(BaseSettings):
         ),
     ]
     github_token: Annotated[str, Field(validation_alias="GITHUB_TOKEN", default="")]
+    job_timeout_seconds: int = Field(default=240, ge=30, le=1800)
+    job_lease_seconds: int = Field(default=300, ge=60, le=3600)
+    job_max_attempts: int = Field(default=3, ge=1, le=5)
     github_app_client_id: Annotated[str, Field(validation_alias="GITHUB_APP_CLIENT_ID", default="")]
     github_app_client_secret: Annotated[SecretStr, Field(validation_alias="GITHUB_APP_CLIENT_SECRET", default=SecretStr(""))]
     github_app_id: Annotated[str, Field(validation_alias="GITHUB_APP_ID", default="")]
@@ -57,6 +60,7 @@ class Settings(BaseSettings):
     github_repository_name: str = Field(default="ai-code-review-assistant", pattern=r"^[A-Za-z0-9_-][A-Za-z0-9_.-]{0,99}$")
     github_request_timeout_seconds: float = Field(default=15, gt=0, le=60)
     github_max_retries: int = Field(default=3, ge=0, le=5)
+    github_initial_commit_limit: Annotated[int, Field(validation_alias="GITHUB_INITIAL_COMMIT_LIMIT", default=100, ge=1, le=1000)]
     github_webhook_secret: Annotated[
         str,
         Field(validation_alias="GITHUB_WEBHOOK_SECRET", default=""),
@@ -125,7 +129,9 @@ class Settings(BaseSettings):
 
     @property
     def github_app_configured(self) -> bool:
-        return bool(self.github_app_id.strip() and self.github_app_private_key_path.strip())
+        from pathlib import Path
+        path = Path(self.github_app_private_key_path)
+        return bool(self.github_app_id.strip() and self.github_app_private_key_path.strip() and path.is_absolute() and path.is_file())
 
     @field_validator("github_oauth_callback_url")
     @classmethod
@@ -144,12 +150,14 @@ class Settings(BaseSettings):
         from pathlib import Path
 
         path = Path(value)
-        if not path.is_absolute() or not path.is_file():
-            raise ValueError("GITHUB_APP_PRIVATE_KEY_PATH must be an absolute path to a private key file.")
+        # Missing configuration disables live App operations, not API startup.
+        # app_jwt validates the path again before the client reads the key.
         return str(path)
 
     @model_validator(mode="after")
     def validate_static_review_limits(self) -> "Settings":
+        if self.job_lease_seconds <= self.job_timeout_seconds:
+            raise ValueError("JOB_LEASE_SECONDS must exceed JOB_TIMEOUT_SECONDS")
         if self.static_review_max_total_bytes < self.static_review_max_file_bytes:
             raise ValueError("STATIC_REVIEW_MAX_TOTAL_BYTES must be at least STATIC_REVIEW_MAX_FILE_BYTES")
         if self.app_env != "development" and not self.auth_cookie_secure:

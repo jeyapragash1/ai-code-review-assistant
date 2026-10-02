@@ -78,12 +78,19 @@ async def github_webhook(
             declared_length = int(content_length)
         except ValueError:
             return _error_response(status.HTTP_400_BAD_REQUEST, "Invalid content length.")
+        if declared_length < 0:
+            return _error_response(status.HTTP_400_BAD_REQUEST, "Invalid content length.")
         if declared_length > max_body_bytes:
             return _error_response(status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, "Payload too large.")
 
-    raw_body = await request.body()
-    if len(raw_body) > max_body_bytes:
-        return _error_response(status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, "Payload too large.")
+    chunks = []
+    body_bytes = 0
+    async for chunk in request.stream():
+        body_bytes += len(chunk)
+        if body_bytes > max_body_bytes:
+            return _error_response(status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, "Payload too large.")
+        chunks.append(chunk)
+    raw_body = b"".join(chunks)
 
     if not verify_signature(secret, raw_body, x_hub_signature_256 or ""):
         return _error_response(status.HTTP_401_UNAUTHORIZED, "Invalid webhook signature.")
@@ -130,7 +137,7 @@ async def github_webhook(
             content=WebhookAcceptedResponse(
                 status="accepted",
                 delivery_id=result.delivery_id,
-                event="pull_request",
+                event=result.event,
                 action=result.action or "",
             ).model_dump(),
         )

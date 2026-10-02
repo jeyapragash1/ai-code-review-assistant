@@ -1,5 +1,7 @@
 import type { Page } from "../../types/api.ts";
 import type { Repository, RepositorySummary } from "../../types/repository.ts";
+import type { Issue } from "../../types/issue.ts";
+import type { Commit } from "../../types/commit.ts";
 import type {
   PullRequest,
   PullRequestDetail,
@@ -23,6 +25,45 @@ import { ApiError } from "./errors.ts";
 
 function fail(): never {
   throw new ApiError("unexpected");
+}
+export function parseActivity(v: unknown) {
+  const o = record(v);
+  return { id: uuid(o.id), repository_id: nullable(o.repository_id, uuid), installation_id: nullable(o.installation_id, uuid),
+    actor_login: nullable(o.actor_login, str), event_type: str(o.event_type), event_action: nullable(o.event_action, str),
+    event_at: date(o.event_at), received_at: date(o.received_at), processing_status: str(o.processing_status),
+    retry_count: num(o.retry_count), error_message: nullable(o.error_message, str) };
+}
+export function parseSyncStatus(v: unknown) {
+  const o = record(v);
+  return { app_configured: bool(o.app_configured), private_key_configured: bool(o.private_key_configured),
+    webhook_configured: bool(o.webhook_configured), installation_count: num(o.installation_count),
+    accessible_repository_count: num(o.accessible_repository_count), last_synchronized_at: nullable(o.last_synchronized_at, date),
+    last_result: nullable(o.last_result, str), safe_error: nullable(o.safe_error, str) };
+}
+export function parseInstallations(v: unknown) {
+  return array(v, value => { const o = record(value); return { id: num(o.id), account_login: str(o.account_login),
+    is_active: bool(o.is_active), repository_count: num(o.repository_count), last_synced_at: nullable(o.last_synced_at, date) }; });
+}
+export function parseReviewJob(v: unknown) {
+  if (v === null) return null;
+  const o = record(v), status = str(o.status);
+  if (!["queued", "processing", "completed", "failed", "retryable"].includes(status)) fail();
+  return { id: uuid(o.id), head_sha: str(o.head_sha), status, retry_count: num(o.retry_count),
+    review_id: nullable(o.review_id, uuid), error_message: nullable(o.error_message, str) };
+}
+export function parseAccountStatistics(v: unknown) {
+  const o = record(v);
+  function counts(value: unknown) { const r = record(value); return Object.fromEntries(Object.entries(r).map(([key, value]) => [key, num(value)])); }
+  const c = counts(o.counts);
+  for (const key of ["repositories_total", "repositories_public", "repositories_private", "repositories_fork", "repositories_archived", "repositories_inactive", "pull_requests_total", "pull_requests_open", "pull_requests_closed", "pull_requests_merged", "pull_requests_draft", "issues_total", "issues_open", "issues_closed", "recent_commits", "captured_push_events", "recent_activity", "review_jobs_queued", "review_jobs_processing", "review_jobs_completed", "review_jobs_failed", "review_jobs_retryable", "reviews_completed", "findings_total", "findings_high"]) num(c[key]);
+  function repo(value: unknown) { const r = record(value); return { id: uuid(r.id), full_name: str(r.full_name) }; }
+  return { counts: c, since: date(o.since), until: date(o.until), activity_metric: str(o.activity_metric),
+    findings_by_severity: counts(o.findings_by_severity), findings_by_category: counts(o.findings_by_category), findings_by_repository: counts(o.findings_by_repository),
+    recently_updated_repositories: array(o.recently_updated_repositories, value => { const r = record(value); return { ...repo(r), github_updated_at: nullable(r.github_updated_at, date), github_pushed_at: nullable(r.github_pushed_at, date), last_synced_at: nullable(r.last_synced_at, date) }; }),
+    most_active_repositories: array(o.most_active_repositories, value => { const r = record(value); return { ...repo(r), activity_count: num(r.activity_count) }; }),
+    recent_commits: array(o.recent_commits, value => { const r = record(value); return { id: uuid(r.id), repository_id: uuid(r.repository_id), sha: str(r.sha), title: str(r.title), committed_at: nullable(r.committed_at, date) }; }),
+    recent_activity: array(o.recent_activity, value => { const r = record(value); return { id: uuid(r.id), repository_id: nullable(r.repository_id, uuid), event_type: str(r.event_type), actor_login: nullable(r.actor_login, str), event_at: date(r.event_at) }; }),
+  };
 }
 function isRecord(v: unknown): v is Record<string, unknown> {
   return typeof v === "object" && v !== null && !Array.isArray(v);
@@ -173,6 +214,25 @@ export function parsePullRequest(v: unknown): PullRequest {
     created_at: date(o.created_at),
     updated_at: date(o.updated_at),
   };
+}
+export function parseIssue(v: unknown): Issue {
+  const o = record(v);
+  const state = o.state === "open" || o.state === "closed" ? o.state : fail();
+  return {
+    id: uuid(o.id), repository_id: uuid(o.repository_id), repository_full_name: str(o.repository_full_name),
+    github_issue_id: num(o.github_issue_id), github_issue_number: num(o.github_issue_number), title: str(o.title),
+    body: nullable(o.body, str), state, state_reason: nullable(o.state_reason, str), author_login: nullable(o.author_login, str),
+    author_github_id: nullable(o.author_github_id, num), assignees: Array.isArray(o.assignees) ? o.assignees : fail(),
+    labels: Array.isArray(o.labels) ? o.labels : fail(), is_locked: bool(o.is_locked), comment_count: num(o.comment_count),
+    html_url: str(o.html_url), github_created_at: date(o.github_created_at), github_updated_at: date(o.github_updated_at),
+    github_closed_at: nullable(o.github_closed_at, date), last_synced_at: nullable(o.last_synced_at, date),
+    created_at: date(o.created_at), updated_at: date(o.updated_at),
+  };
+}
+export function parseCommit(v: unknown): Commit {
+  const o = record(v);
+  if (!/^[0-9a-f]{40}$/i.test(str(o.sha))) fail();
+  return { id: uuid(o.id), repository_id: uuid(o.repository_id), repository_full_name: str(o.repository_full_name), sha: str(o.sha), title: str(o.title), message: nullable(o.message, str), author_name: nullable(o.author_name, str), author_login: nullable(o.author_login, str), committer_name: nullable(o.committer_name, str), committer_login: nullable(o.committer_login, str), authored_at: nullable(o.authored_at, date), committed_at: nullable(o.committed_at, date), html_url: nullable(o.html_url, str), parent_count: num(o.parent_count), reference: nullable(o.reference, str), last_synced_at: nullable(o.last_synced_at, date), created_at: date(o.created_at), updated_at: date(o.updated_at) };
 }
 export function parsePullRequestDetail(v: unknown): PullRequestDetail {
   const o = record(v);

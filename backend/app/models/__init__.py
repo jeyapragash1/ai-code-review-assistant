@@ -18,6 +18,12 @@ from app.models.webhook_event import WebhookEvent
 from app.models.user import User, UserSession
 from app.models.github_oauth_transaction import GitHubOAuthTransaction
 from app.models.github_installation import GitHubInstallation, InstallationRepositoryAccess
+from app.models.issue import GitHubIssue
+from app.models.commit import GitHubCommit
+from app.models.activity import ActivityEvent
+from app.models.jobs import ReviewJob, WebhookJob
+from app.models.sync_run import GitHubSyncRun
+from app.models.access_grant import UserInstallationAccess, UserRepositoryAccess
 
 __all__ = [
     "FindingCategory",
@@ -40,4 +46,12 @@ __all__ = [
     "GitHubOAuthTransaction",
     "GitHubInstallation",
     "InstallationRepositoryAccess",
+    "GitHubIssue",
+    "GitHubCommit",
+    "ActivityEvent",
+    "ReviewJob",
+    "WebhookJob",
+    "GitHubSyncRun",
+    "UserInstallationAccess",
+    "UserRepositoryAccess",
 ]

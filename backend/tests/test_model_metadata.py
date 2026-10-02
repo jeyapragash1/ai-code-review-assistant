@@ -40,7 +40,7 @@ def unique_constraints(table_name: str) -> set[tuple[str, ...]]:
 
 
 def test_github_ingestion_tables_are_registered() -> None:
-    assert {"repositories", "pull_requests", "webhook_events"}.issubset(Base.metadata.tables)
+    assert {"repositories", "pull_requests", "webhook_events", "github_issues"}.issubset(Base.metadata.tables)
 
 
 def test_review_tables_are_registered() -> None:
@@ -154,6 +154,12 @@ def test_repository_unique_constraints_exist() -> None:
 
     assert ("github_repository_id",) in constraints
     assert ("full_name",) in constraints
+
+
+def test_issue_unique_constraints_exist() -> None:
+    constraints = unique_constraints("github_issues")
+    assert ("github_issue_id",) in constraints
+    assert ("repository_id", "github_issue_number") in constraints
 
 
 def test_pull_request_repository_number_uniqueness_exists() -> None:

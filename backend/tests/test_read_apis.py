@@ -483,6 +483,10 @@ def test_review_database_failure_is_safe_and_rolls_back(caplog):
     session.rollback.assert_awaited_once()
 
 
-def test_no_public_sync_route():
+def test_sync_route_is_protected_and_post_only():
     paths = create_app().openapi()["paths"]
-    assert not any("sync" in path for path in paths)
+    assert "/api/v1/github/sync" in paths
+    assert set(paths["/api/v1/github/sync"]) == {"post"}
+    with TestClient(create_app()) as client:
+        assert client.get("/api/v1/github/sync/status").status_code == 401
+        assert client.post("/api/v1/github/sync").status_code == 401

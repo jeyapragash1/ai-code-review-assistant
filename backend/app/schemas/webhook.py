@@ -16,7 +16,7 @@ class WebhookAcceptedResponse(BaseModel):
 
     status: Literal["accepted"]
     delivery_id: str
-    event: Literal["pull_request"]
+    event: str
     action: str
 
 

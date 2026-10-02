@@ -13,7 +13,7 @@ from pydantic import TypeAdapter, ValidationError
 
 from app.core.config import Settings
 from app.clients.errors import GitHubError, GitHubRateLimitError
-from app.schemas.github import GitHubContentFile, GitHubPullRequest, GitHubPullRequestFile, GitHubRepository, PullRequestReference, RepositoryTarget
+from app.schemas.github import GitHubCommit, GitHubContentFile, GitHubIssue, GitHubPullRequest, GitHubPullRequestFile, GitHubRepository, PullRequestReference, RepositoryTarget, is_github_pull_request_issue
 
 
 def usable_token(value: str) -> str | None:
@@ -27,6 +27,7 @@ def usable_token(value: str) -> str | None:
 
 class GitHubClient:
     def __init__(self, settings: Settings, *, transport: httpx.AsyncBaseTransport | None = None, access_token: str | None = None) -> None:
+        self._settings = settings
         headers = {
             "Accept": "application/vnd.github+json",
             "X-GitHub-Api-Version": settings.github_api_version,
@@ -168,6 +169,41 @@ class GitHubClient:
             if not next_url:
                 return items
             page = self._next_page(next_url, path, page)
+
+    async def issues(self, target: RepositoryTarget) -> list[GitHubIssue]:
+        path = f"/repos/{target.owner}/{target.repo}/issues"
+        page, items = 1, []
+        while True:
+            response = await self._get(path, {"state": "all", "sort": "updated", "direction": "desc", "per_page": 100, "page": page})
+            try:
+                raw_items = response.json()
+                if not isinstance(raw_items, list):
+                    raise ValueError()
+                for raw_item in raw_items:
+                    if not isinstance(raw_item, dict) or is_github_pull_request_issue(raw_item):
+                        continue
+                    items.append(GitHubIssue.model_validate(raw_item))
+            except (TypeError, ValueError, ValidationError):
+                raise GitHubError("GitHub returned invalid issue metadata.") from None
+            next_url = response.links.get("next", {}).get("url")
+            if not next_url:
+                return items
+            page = self._next_page(next_url, path, page)
+
+    async def commits(self, target: RepositoryTarget, limit: int) -> list[GitHubCommit]:
+        path = f"/repos/{target.owner}/{target.repo}/commits"
+        page, items = 1, []
+        while len(items) < limit:
+            response = await self._get(path, {"per_page": min(100, limit - len(items)), "page": page})
+            try:
+                values = TypeAdapter(list[GitHubCommit]).validate_json(response.content)
+            except ValidationError:
+                raise GitHubError("GitHub returned invalid commit metadata.") from None
+            items.extend(values)
+            if len(values) < min(100, limit - len(items) + len(values)):
+                break
+            page += 1
+        return items[:limit]
 
     async def file_content(self, target: RepositoryTarget, path: str, ref: str, max_bytes: int) -> bytes:
         encoded_path = quote(path, safe="/")

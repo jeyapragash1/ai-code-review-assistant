@@ -69,7 +69,6 @@ export function SettingsView({
         </dl>
       </section>
       {[
-        "GitHub App repository installation",
         "AI review configuration",
         "Notification preferences",
       ].map((name) => (
@@ -85,8 +84,8 @@ export function SettingsView({
         <h2 className="section-title">Data and privacy</h2>
         <p className="muted mt-3 text-sm leading-7">
           This workspace reads synchronized backend data. GitHub synchronization
-          is an administrative CLI operation. Review processing and
-          notifications are available in a later phase. Credentials are never
+          controls are below. Durable workers process authenticated webhook
+          deliveries and queued static reviews. Credentials are never
           displayed here.
         </p>
       </section>

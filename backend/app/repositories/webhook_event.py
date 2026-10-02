@@ -7,7 +7,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import WebhookEvent, WebhookEventStatus
+from app.models import WebhookEvent, WebhookEventStatus, WebhookJob
 
 logger = logging.getLogger(__name__)
 
@@ -56,6 +56,9 @@ class WebhookEventRepository:
         self.session.add(event)
 
         try:
+            await self.session.flush()
+            if data.status == WebhookEventStatus.RECEIVED:
+                self.session.add(WebhookJob(webhook_event_id=event.id))
             await self.session.commit()
         except IntegrityError as exc:
             await self.session.rollback()

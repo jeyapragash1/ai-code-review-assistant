@@ -243,3 +243,24 @@ Gemini, GitHub comments, webhook-triggered execution, background queues, and aut
 Browser authentication uses the GitHub authorization-code flow with PKCE. FastAPI owns the callback and a host-only, HTTP-only `codereview_session` cookie; GitHub access tokens are used only briefly to identify the user and are never stored. The development allowlist is temporary until GitHub App installation ownership is implemented.
 
 Configure these private environment variables manually in `backend/.env`: `GITHUB_APP_CLIENT_ID`, `GITHUB_APP_CLIENT_SECRET`, `GITHUB_OAUTH_CALLBACK_URL`, `AUTH_ALLOWED_GITHUB_LOGINS`, `AUTH_SESSION_COOKIE_NAME`, `AUTH_SESSION_TTL_SECONDS`, `AUTH_OAUTH_STATE_TTL_SECONDS`, `AUTH_COOKIE_SECURE`, and `AUTH_COOKIE_SAMESITE`.
+
+## GitHub App Workspace Data
+
+The GitHub App foundation uses `GITHUB_APP_ID`, `GITHUB_APP_PRIVATE_KEY_PATH`, and `GITHUB_INSTALLATION_TOKEN_REFRESH_SKEW_SECONDS`. The private-key path must be absolute and outside this repository; key contents and installation tokens are never persisted.
+
+Run the administrative installation synchronization with:
+
+```powershell
+python -m app.cli.sync_github_installations
+```
+
+Protected status and synchronization APIs are available at `GET /api/v1/github/installations`, `GET /api/v1/github/sync/status`, and `POST /api/v1/github/sync`. The existing single-repository CLI remains supported.
+
+Issues exclude GitHub records containing the `pull_request` marker. Commit synchronization stores metadata only, is limited by `GITHUB_INITIAL_COMMIT_LIMIT`, and does not label commits as push events. Read APIs are available at `/api/v1/issues` and `/api/v1/commits`; the frontend routes are `/issues` and `/commits`.
+
+Durable webhook processing, captured activity events, automatic review jobs, and AI review workers remain deferred until their job models and GitHub App webhook configuration are implemented.
+# Durable processing and production operations
+
+See [production operations](../PRODUCTION.md) for the App permissions, webhook subscriptions, account grants, worker commands, database backup/restore, deployment checklist and secret rotation.
+
+New APIs: `GET /api/v1/activity`, `GET /api/v1/repositories/{id}/activity`, `GET /api/v1/dashboard/account-statistics`, and authenticated `GET/POST /api/v1/pull-requests/{id}/review-jobs`. Activity accepts repository/event type/actor and timezone-aware since/until filters plus page/page_size. Account statistics default recent commits/activity to 30 days; other aggregate counts cover all synchronized records.

@@ -23,6 +23,8 @@ import { Filters } from "@/components/ui/filters";
 import { Pagination } from "@/components/ui/pagination";
 import { PullRequestList } from "@/components/pull-requests/pull-request-list";
 import { formatDate } from "@/lib/utils";
+import Link from "next/link";
+import { AccountDashboard } from "@/components/dashboard/account-dashboard";
 export default async function Page({
   params,
   searchParams,
@@ -102,6 +104,8 @@ export default async function Page({
         />
       </div>
       <Filters path={path} values={query} mode="nested" />
+      <nav aria-label="Repository sections" className="flex flex-wrap gap-3">{["pull-requests", "issues", "commits", "activity", "reviews"].map(section => <Link key={section} className="button" href={`/${section}?repository_id=${id}`}>{section.replaceAll("-", " ")}</Link>)}</nav>
+      <AccountDashboard repositoryId={id} />
       <Card>
         <div className="panel-head">
           <h2>Pull Requests</h2>

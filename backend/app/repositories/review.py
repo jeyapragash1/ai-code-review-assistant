@@ -100,7 +100,7 @@ class ReviewStore:
         else:
             raise ValueError("A pull_request_id or repository/pr_number pair is required.")
         if lock:
-            statement = statement.with_for_update(of=PullRequest)
+            statement = statement.with_for_update(of=PullRequest).execution_options(populate_existing=True)
         return (await self.session.execute(statement)).one_or_none()
 
     async def completed_for_commit(self, pull_request_id: UUID, commit_sha: str) -> Review | None:
@@ -114,6 +114,12 @@ class ReviewStore:
             .order_by(Review.attempt_number.desc(), Review.started_at.desc(), Review.id)
             .limit(1)
         )).scalar_one_or_none()
+
+    async def active_for_commit(self, pull_request_id: UUID, commit_sha: str) -> Review | None:
+        return (await self.session.execute(select(Review).where(
+            Review.pull_request_id == pull_request_id, Review.commit_sha == commit_sha,
+            Review.status.notin_([ReviewStatus.COMPLETED, ReviewStatus.FAILED])
+        ).limit(1))).scalar_one_or_none()
 
     async def next_attempt_number(self, pull_request_id: UUID, commit_sha: str) -> int:
         current = (await self.session.execute(

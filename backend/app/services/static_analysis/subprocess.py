@@ -32,18 +32,20 @@ def analyzer_environment() -> dict[str, str]:
 
 
 async def run_analyzer(args: list[str], cwd: Path, timeout_seconds: float) -> AnalyzerProcessResult:
+    task = asyncio.create_task(asyncio.to_thread(
+        subprocess.run, args, cwd=str(cwd), env=analyzer_environment(),
+        shell=False, capture_output=True, text=True, timeout=timeout_seconds, check=False,
+    ))
     try:
-        result = await asyncio.to_thread(
-            subprocess.run,
-            args,
-            cwd=str(cwd),
-            env=analyzer_environment(),
-            shell=False,
-            capture_output=True,
-            text=True,
-            timeout=timeout_seconds,
-            check=False,
-        )
+        result = await asyncio.shield(task)
+    except asyncio.CancelledError:
+        # Cancelling to_thread cannot stop its subprocess. Wait for the trusted
+        # analyzer's bounded subprocess timeout before temporary-file cleanup.
+        try:
+            await asyncio.shield(task)
+        except Exception:
+            pass
+        raise
     except subprocess.TimeoutExpired:
         raise AnalyzerTimeoutError("Analyzer timed out.") from None
     return AnalyzerProcessResult(

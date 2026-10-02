@@ -102,7 +102,7 @@ class GitHubAppClient:
             follow_redirects=False,
             transport=transport,
         )
-        self._token: InstallationToken | None = None
+        self._tokens: dict[int, InstallationToken] = {}
 
     async def __aenter__(self) -> "GitHubAppClient":
         return self
@@ -153,8 +153,9 @@ class GitHubAppClient:
 
     async def installation_token(self, installation_id: int) -> InstallationToken:
         now = datetime.now(UTC)
-        if self._token and self._token.expires_at - timedelta(seconds=self._settings.github_installation_token_refresh_skew_seconds) > now:
-            return self._token
+        cached = self._tokens.get(installation_id)
+        if cached and cached.expires_at - timedelta(seconds=self._settings.github_installation_token_refresh_skew_seconds) > now:
+            return cached
         response = await self._request("POST", f"/app/installations/{installation_id}/access_tokens")
         try:
             data = response.json()
@@ -162,8 +163,9 @@ class GitHubAppClient:
             expires_at = TypeAdapter(AwareDatetime).validate_python(data["expires_at"])
             if not isinstance(token, str) or not token:
                 raise ValueError()
-            self._token = InstallationToken(token, expires_at)
-            return self._token
+            result = InstallationToken(token, expires_at)
+            self._tokens[installation_id] = result
+            return result
         except (KeyError, TypeError, ValueError, ValidationError):
             raise GitHubError("GitHub returned invalid installation token metadata.") from None
 

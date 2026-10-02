@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import asyncio
+
 from collections import Counter
 from datetime import UTC, datetime
 from decimal import Decimal
@@ -10,12 +12,13 @@ from uuid import UUID
 
 from pydantic import BaseModel, Field
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
+from sqlalchemy import update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.clients.errors import GitHubError
 from app.clients.github import GitHubClient
 from app.core.config import Settings
-from app.models import PullRequest, Repository, ReviewRisk, ReviewStatus, ReviewTriggerType
+from app.models import PullRequest, Repository, ReviewJob, ReviewRisk, ReviewStatus, ReviewTriggerType
 from app.repositories.review import ReviewFindingStore, ReviewStore
 from app.schemas.github import RepositoryTarget
 from app.schemas.review import ReviewCreate, ReviewFindingCreate, ReviewStatusUpdate
@@ -173,6 +176,10 @@ async def run_static_review(
     repository_full_name: str | None = None,
     pr_number: int | None = None,
     force: bool = False,
+    expected_head_sha: str | None = None,
+    trigger_type: ReviewTriggerType = ReviewTriggerType.MANUAL,
+    job_id: UUID | None = None,
+    lease_token: UUID | None = None,
 ) -> StaticReviewSummary:
     started = time.perf_counter()
     review_id: UUID | None = None
@@ -193,6 +200,8 @@ async def run_static_review(
             if row is None:
                 raise StaticReviewError("pull_request_not_found", "Pull Request was not found in PostgreSQL.")
             pull_request, repository = row
+            if expected_head_sha is not None and pull_request.head_sha != expected_head_sha:
+                raise StaticReviewError("obsolete_commit", "The queued Pull Request commit is no longer current.")
             existing = await store.completed_for_commit(pull_request.id, pull_request.head_sha)
             if existing is not None and not force:
                 total, severity, category = await store.finding_summary_counts(existing.id)
@@ -212,16 +221,21 @@ async def run_static_review(
                     skipped_files_by_reason={},
                     elapsed_ms=max(0, int((time.perf_counter() - started) * 1000)),
                 )
+            if await store.active_for_commit(pull_request.id, pull_request.head_sha):
+                raise StaticReviewError("review_in_progress", "A review is already processing for this commit.")
             attempt = await store.next_attempt_number(pull_request.id, pull_request.head_sha)
             review = await store.create(ReviewCreate(
                 pull_request_id=pull_request.id,
                 commit_sha=pull_request.head_sha,
                 attempt_number=attempt,
                 status=ReviewStatus.QUEUED,
-                trigger_type=ReviewTriggerType.MANUAL,
+                trigger_type=trigger_type,
                 started_at=datetime.now(UTC),
             ))
             review_id = review.id
+            if job_id is not None:
+                await session.execute(update(ReviewJob).where(ReviewJob.id == job_id,
+                    ReviewJob.lease_token == lease_token, ReviewJob.status == "processing").values(review_id=review_id))
 
         target = RepositoryTarget(owner=repository.owner, repo=repository.name)
         await _mark(session, review_id, ReviewStatusUpdate(status=ReviewStatus.FETCHING))
@@ -269,6 +283,17 @@ async def run_static_review(
             skipped_files=skipped_files,
             started=started,
         )
+    except asyncio.CancelledError:
+        # asyncio.timeout cancels this coroutine; preserve a terminal review
+        # state after TemporaryDirectory has cleaned up all downloaded files.
+        await session.rollback()
+        if review_id is not None:
+            try:
+                await _mark(session, review_id, ReviewStatusUpdate(status=ReviewStatus.FAILED,
+                    error_code="review_timeout", error_message="Review processing timed out or was interrupted.", completed_at=datetime.now(UTC)))
+            except SQLAlchemyError:
+                pass
+        raise
     except IntegrityError as exc:
         raise StaticReviewError("duplicate_review_attempt", "A review attempt already exists for this Pull Request commit.", review_id) from exc
     except (GitHubError, AnalyzerError, SQLAlchemyError, StaticReviewError) as exc:

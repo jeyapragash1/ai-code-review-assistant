@@ -1,5 +1,6 @@
 import hashlib
 import logging
+import re
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Final
@@ -9,7 +10,10 @@ from sqlalchemy.exc import SQLAlchemyError
 from app.models import WebhookEventStatus
 from app.repositories.webhook_event import WebhookEventCreate, WebhookEventRepository
 
-SUPPORTED_EVENTS: Final[set[str]] = {"ping", "pull_request"}
+SUPPORTED_EVENTS: Final[set[str]] = {
+    "ping", "installation", "installation_repositories", "repository", "push",
+    "pull_request", "issues", "issue_comment", "pull_request_review", "pull_request_review_comment",
+}
 SUPPORTED_PULL_REQUEST_ACTIONS: Final[set[str]] = {
     "opened",
     "synchronize",
@@ -89,7 +93,9 @@ class GitHubWebhookIngestionService:
 def determine_initial_status(event_name: str, action: str | None) -> WebhookEventStatus:
     if event_name == "ping":
         return WebhookEventStatus.IGNORED
-    if event_name == "pull_request" and action in SUPPORTED_PULL_REQUEST_ACTIONS:
+    if event_name == "pull_request" and action:
+        return WebhookEventStatus.RECEIVED
+    if event_name in SUPPORTED_EVENTS - {"ping", "pull_request"}:
         return WebhookEventStatus.RECEIVED
     return WebhookEventStatus.IGNORED
 
@@ -116,6 +122,6 @@ def extract_pull_request_number(payload: dict[str, object]) -> int | None:
 
 def _extract_optional_string(payload: dict[str, object], key: str) -> str | None:
     value = payload.get(key)
-    if isinstance(value, str) and value:
+    if isinstance(value, str) and re.fullmatch(r"[a-z_]{1,100}", value):
         return value
     return None

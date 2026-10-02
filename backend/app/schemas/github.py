@@ -96,6 +96,42 @@ class GitHubPullRequestFile(BaseModel):
     head_sha: str | None = Field(default=None, pattern=r"^[0-9a-fA-F]{40}$")
 
 
+class GitHubIssue(BaseModel):
+    model_config = ConfigDict(extra="ignore", hide_input_in_errors=True)
+
+    github_issue_id: PositiveID = Field(validation_alias="id")
+    github_issue_number: Annotated[int, Field(strict=True, gt=0, le=2**31 - 1)] = Field(validation_alias="number")
+    title: str = Field(min_length=1, max_length=512)
+    body: str | None = Field(default=None, max_length=100_000)
+    state: Literal["open", "closed"]
+    state_reason: str | None = Field(default=None, max_length=32)
+    author_login: str | None = Field(default=None, validation_alias=AliasPath("user", "login"), max_length=255)
+    author_github_id: PositiveID | None = Field(default=None, validation_alias=AliasPath("user", "id"))
+    assignees: list[dict] = Field(default_factory=list)
+    labels: list[dict] = Field(default_factory=list)
+    is_locked: bool = Field(validation_alias="locked", default=False, strict=True)
+    comment_count: Counter = Field(validation_alias="comments", default=0)
+    html_url: str = Field(max_length=2048)
+    github_created_at: AwareDatetime = Field(validation_alias="created_at")
+    github_updated_at: AwareDatetime = Field(validation_alias="updated_at")
+    github_closed_at: AwareDatetime | None = Field(default=None, validation_alias="closed_at")
+
+
+def is_github_pull_request_issue(value: dict) -> bool:
+    return isinstance(value.get("pull_request"), dict)
+
+
+class GitHubCommit(BaseModel):
+    model_config = ConfigDict(extra="ignore", hide_input_in_errors=True)
+
+    sha: str = Field(pattern=r"^[0-9a-fA-F]{40}$")
+    html_url: str | None = None
+    commit: dict
+    author: dict | None = None
+    committer: dict | None = None
+    parents: list[dict] = Field(default_factory=list)
+
+
 class GitHubContentFile(BaseModel):
     model_config = ConfigDict(extra="ignore", hide_input_in_errors=True)
 

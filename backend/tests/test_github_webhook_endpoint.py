@@ -11,6 +11,7 @@ from app.core.config import settings
 from app.models import WebhookEventStatus
 from app.main import app
 from app.services.github.webhook_ingestion import WebhookIngestionResult, WebhookPersistenceError
+from app.services.github.webhook_ingestion import determine_initial_status
 from app.services.github.webhook_security import calculate_signature
 
 SECRET = "unit-test-webhook-secret"
@@ -57,10 +58,7 @@ class FakeIngestionService:
 
         action = payload.get("action")
         normalized_action = action if isinstance(action, str) else None
-        if event_name == "pull_request" and normalized_action in {"opened", "synchronize", "reopened", "closed"}:
-            event_status = WebhookEventStatus.RECEIVED
-        else:
-            event_status = WebhookEventStatus.IGNORED
+        event_status = determine_initial_status(event_name, normalized_action)
 
         return WebhookIngestionResult(
             delivery_id=delivery_id,
@@ -257,7 +255,7 @@ def test_supported_pull_request_action_returns_accepted(client: TestClient) -> N
     }
 
 
-def test_unsupported_pull_request_action_returns_ignored(client: TestClient) -> None:
+def test_edited_pull_request_is_accepted_without_inline_processing(client: TestClient) -> None:
     service = FakeIngestionService()
     override_service(service)
     body = encode_payload({"action": "edited", "number": 1, "repository": {"id": 2}})
@@ -267,7 +265,7 @@ def test_unsupported_pull_request_action_returns_ignored(client: TestClient) -> 
 
     assert response.status_code == 202
     assert response.json() == {
-        "status": "ignored",
+        "status": "accepted",
         "delivery_id": DELIVERY_ID,
         "event": "pull_request",
         "action": "edited",
@@ -278,7 +276,7 @@ def test_unsupported_event_returns_ignored(client: TestClient) -> None:
     service = FakeIngestionService()
     override_service(service)
     body = encode_payload({"action": "created"})
-    headers = webhook_headers(body, event="issues")
+    headers = webhook_headers(body, event="unknown_event")
 
     response = client.post("/api/v1/webhooks/github", content=body, headers=headers)
 
@@ -286,7 +284,7 @@ def test_unsupported_event_returns_ignored(client: TestClient) -> None:
     assert response.json() == {
         "status": "ignored",
         "delivery_id": DELIVERY_ID,
-        "event": "issues",
+        "event": "unknown_event",
         "action": "created",
     }
 

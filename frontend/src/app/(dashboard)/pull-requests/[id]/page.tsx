@@ -17,6 +17,9 @@ import { GitHubLink } from "@/components/ui/github-link";
 import { RefreshButton } from "@/components/ui/refresh-button";
 import { ReviewList } from "@/components/reviews/review-list";
 import { formatDate, label, shortSha } from "@/lib/utils";
+import { JobButton } from "@/components/ui/job-button";
+import { get } from "@/lib/api/client";
+import { parseReviewJob } from "@/lib/api/parsers";
 export default async function Page({
   params,
 }: {
@@ -40,6 +43,7 @@ export default async function Page({
     (review) => !["completed", "failed"].includes(review.status),
   );
   const latestCompleted = completed[0];
+  const job = await load(() => get(["pull-requests", id, "review-jobs"], parseReviewJob));
   return (
     <div className="page-stack">
       <Breadcrumbs
@@ -120,6 +124,7 @@ export default async function Page({
         />
       </div>
       <Card>
+        <div className="p-5"><h2 className="section-title">Review job</h2>{job.ok ? <><p className="muted my-3">{job.data ? `${job.data.status} · Attempt ${job.data.retry_count}` : "No job queued for the current commit."}</p>{job.data?.error_message && <p role="alert">{job.data.error_message}</p>}<JobButton endpoint={`/api/review-jobs/${id}`} label="Run review" disabled={p.status !== "open" || job.data?.status === "processing" || job.data?.status === "queued"} /></> : <ApiState kind={job.error} />}</div>
         <div className="panel-head">
           <h2>Review history</h2>
           <span className="muted text-xs">Static analysis</span>

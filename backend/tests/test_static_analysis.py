@@ -297,6 +297,7 @@ def test_review_state_flow_idempotency_and_force(monkeypatch):
 
     monkeypatch.setattr("app.repositories.review.ReviewStore.pull_request_with_repository", fake_pr)
     monkeypatch.setattr("app.repositories.review.ReviewStore.completed_for_commit", fake_existing)
+    monkeypatch.setattr("app.repositories.review.ReviewStore.active_for_commit", AsyncMock(return_value=None))
     monkeypatch.setattr("app.repositories.review.ReviewStore.next_attempt_number", fake_next)
     monkeypatch.setattr("app.repositories.review.ReviewStore.create", fake_create)
     monkeypatch.setattr("app.repositories.review.ReviewStore.mark_status", fake_mark)
@@ -361,6 +362,7 @@ def test_review_failure_marks_failed_and_rolls_back_findings(monkeypatch):
 
     monkeypatch.setattr("app.repositories.review.ReviewStore.pull_request_with_repository", fake_pr)
     monkeypatch.setattr("app.repositories.review.ReviewStore.completed_for_commit", fake_existing)
+    monkeypatch.setattr("app.repositories.review.ReviewStore.active_for_commit", AsyncMock(return_value=None))
     monkeypatch.setattr("app.repositories.review.ReviewStore.next_attempt_number", fake_next)
     monkeypatch.setattr("app.repositories.review.ReviewStore.create", fake_create)
     monkeypatch.setattr("app.repositories.review.ReviewStore.mark_status", fake_mark)

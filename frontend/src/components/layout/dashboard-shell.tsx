@@ -6,6 +6,8 @@ import { useTheme } from "next-themes";
 import {
   Bell,
   BookOpen,
+  CircleDot,
+  GitCommitHorizontal,
   ChevronLeft,
   ChevronRight,
   CodeXml,
@@ -28,6 +30,9 @@ const icons = {
   dashboard: LayoutDashboard,
   repositories: FolderGit2,
   pullRequests: GitPullRequest,
+  issues: CircleDot,
+  commits: GitCommitHorizontal,
+  activity: Bell,
   reviews: ShieldCheck,
   settings: Settings,
 };
